@@ -187,6 +187,9 @@ import cn.sherlock.com.sun.media.sound.SF2Soundbank;
 public class XServerDisplayActivity extends AppCompatActivity {
     public static String NOTIFICATION_CHANNEL_ID = "Winlator";
     public static int NOTIFICATION_ID = 9004;
+    private static final String GN_ACTION_LAUNCH_GAME = "app.gamenative.LAUNCH_GAME";
+    private static final String GN_URI_SCHEME = "gamenative";
+    private static final String GN_URI_HOST = "run";
     private XServerView xServerView;
     // Version-A spike: auto-swaps the game onto a connected external display (TV), handheld = controller.
     private com.winlator.star.display.ExternalDisplayController externalDisplayController;
@@ -2543,6 +2546,21 @@ public class XServerDisplayActivity extends AppCompatActivity {
             return;
         }
 
+        // GameNative frontend launch (Daijisho stock Steam platform / Beacon): resolve by Steam
+        // app id to a shortcut and feed the normal launch pipeline the same fields it expects.
+        if (isGameNativeLaunchIntent(getIntent())) {
+            Shortcut gnShortcut = resolveGameNativeLaunch(getIntent());
+            if (gnShortcut != null) {
+                shortcutPath = gnShortcut.file.getAbsolutePath();
+                container = gnShortcut.container;
+                containerId = gnShortcut.container.id;
+                shortcutName = gnShortcut.name;
+                Log.d("XServerDisplayActivity", "GameNative launch resolved: " + shortcutPath);
+            } else {
+                Log.w("XServerDisplayActivity", "GameNative launch intent had no matching Steam shortcut");
+            }
+        }
+
         // Initialise the Steam DB singleton in THIS process. A game launched directly (from a
         // library shortcut, not via the store) never ran SteamRepository.initialize(ctx), so the
         // repo's appContext is null and getDatabase() throws IllegalStateException ("SteamDatabase
@@ -3144,6 +3162,54 @@ public class XServerDisplayActivity extends AppCompatActivity {
             configChangedCallback = runnable;
         } else
               runnable.run();
+    }
+
+    /** True when the intent is a GameNative frontend launch (action or gamenative://run URI). */
+    private boolean isGameNativeLaunchIntent(Intent intent) {
+        if (intent == null) return false;
+        if (GN_ACTION_LAUNCH_GAME.equals(intent.getAction())) return true;
+        if (!Intent.ACTION_VIEW.equals(intent.getAction())) return false;
+        android.net.Uri data = intent.getData();
+        return data != null
+                && GN_URI_SCHEME.equalsIgnoreCase(data.getScheme())
+                && GN_URI_HOST.equalsIgnoreCase(data.getHost());
+    }
+
+    private int steamAppIdOfShortcut(Shortcut sc) {
+        try {
+            return Integer.parseInt(sc.getExtra("steamAppId", "0").trim());
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    /**
+     * Resolve a GameNative launch (action app.gamenative.LAUNCH_GAME with app_id, or
+     * gamenative://run?appid=..&gamesource=STEAM) to a Bannerlator Steam shortcut by app id.
+     * Only Steam is supported by this fork.
+     */
+    private Shortcut resolveGameNativeLaunch(Intent intent) {
+        int appId = 0;
+        if (GN_ACTION_LAUNCH_GAME.equals(intent.getAction())) {
+            appId = intent.getIntExtra("app_id", 0);
+        } else if (Intent.ACTION_VIEW.equals(intent.getAction())) {
+            android.net.Uri data = intent.getData();
+            if (data != null) {
+                String s = data.getQueryParameter("appid");
+                if (s != null) {
+                    try { appId = Integer.parseInt(s); } catch (NumberFormatException ignored) {}
+                }
+            }
+        }
+        if (appId <= 0) return null;
+        try {
+            for (Shortcut sc : containerManager.loadShortcuts()) {
+                if (steamAppIdOfShortcut(sc) == appId) return sc;
+            }
+        } catch (Exception e) {
+            Log.e("XServerDisplayActivity", "Failed to resolve GameNative launch", e);
+        }
+        return null;
     }
 
     // Method to parse container_id from .desktop file
