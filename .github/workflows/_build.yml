@@ -26,6 +26,20 @@ on:
         description: 'Label for APK file names'
         required: true
         type: string
+      # Optional fork hook: when a caller supplies these, they are exported to the Gradle
+      # invocation and app/build.gradle stamps them instead of its committed literals
+      # (VERSION_NAME ?: "3.1.3-pre3" / VERSION_CODE ?: 89). Every existing caller omits
+      # them, so both stay empty and the build is byte-for-byte the same as before.
+      version_name:
+        description: 'Optional versionName override (empty = committed default)'
+        required: false
+        default: ''
+        type: string
+      version_code:
+        description: 'Optional versionCode override (empty = committed default 89)'
+        required: false
+        default: ''
+        type: string
     secrets:
       # Samsung Galaxy Performance SDK jar (base64), optional. Supplied only by callers that
       # opt in (test builds). When absent the build proceeds without it and the Galaxy
@@ -486,6 +500,12 @@ jobs:
       # ONE flavor per job → only one ~588MB APK packages here, so the old
       # `--no-parallel --max-workers=1` OOM-guard is dropped; full workers now.
       # org.gradle.caching=true (gradle.properties) reuses task outputs across runs.
+      # VERSION_NAME/VERSION_CODE (fork release hook) reach app/build.gradle only when a
+      # caller passed them; empty strings are falsy in app/build.gradle's `?:` guards, so
+      # existing callers keep the committed versionName/versionCode untouched.
+      env:
+        VERSION_NAME: ${{ inputs.version_name }}
+        VERSION_CODE: ${{ inputs.version_code }}
       run: ./gradlew ${{ matrix.flavor.task }} -Dorg.gradle.jvmargs="-Xmx5g -XX:MaxMetaspaceSize=1g"
 
     - name: Get version info

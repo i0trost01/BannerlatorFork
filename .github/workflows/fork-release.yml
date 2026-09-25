@@ -1,0 +1,78 @@
+name: Fork Release (signed standard APK for Obtainium)
+
+# FORK-ONLY manual release. Builds through the same reusable matrix build (_build.yml)
+# that build-artifacts.yml / release.yml / pr-check.yml use, so every cache and native
+# step is identical; the only additions are a stamped version and a single published
+# asset. Unlike release.yml this does NOT touch update.json or the in-app updater.
+#
+# Why the versionCode comes from the clock, not github.run_number:
+#   app/build.gradle's committed versionCode is 89, and github.run_number starts at 1
+#   for a new repository. A run_number stamp (1, 2, 3 …) would therefore make every
+#   fork build numerically OLDER than the base app, and Obtainium/Android would refuse
+#   to install it over an existing one. `date -u +%y%m%d%H` (e.g. 26092514) is a large
+#   integer that only ever moves forward. This is a controller RULING.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version / tag, e.g. 3.1.3-fork.1'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  # Phase 0 — compute the increasing versionCode before anything expensive runs.
+  prepare:
+    runs-on: ubuntu-22.04
+    outputs:
+      version_code: ${{ steps.stamp.outputs.version_code }}
+    steps:
+    - name: Compute increasing versionCode (UTC YYMMDDHH)
+      id: stamp
+      run: |
+        VC=$(date -u +%y%m%d%H)
+        echo "version_code=$VC" >> "$GITHUB_OUTPUT"
+        echo "fork versionCode = $VC (committed base is 89)"
+
+  # Phase 1 — the proven reusable matrix build, told to stamp the fork version.
+  build:
+    needs: prepare
+    uses: ./.github/workflows/_build.yml
+    with:
+      release_number: ${{ inputs.version }}
+      version_name: ${{ inputs.version }}
+      version_code: ${{ needs.prepare.outputs.version_code }}
+    secrets: inherit
+
+  # Phase 2 — publish ONLY the standard flavor as a signed, non-prerelease, latest asset.
+  publish:
+    needs: build
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+    - name: Download the standard APK
+      uses: actions/download-artifact@v4
+      with:
+        name: Bannerlator-${{ inputs.version }}-standard
+        path: dist
+
+    - name: Rename the APK for Obtainium
+      run: |
+        set -euo pipefail
+        ls -la dist
+        mv "dist/Bannerlator-${{ inputs.version }}-standard.apk" \
+           "dist/Bannerlator-Fork-${{ inputs.version }}-Standard-signed.apk"
+        ls -la dist
+
+    - name: Publish GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ inputs.version }}
+        name: Bannerlator Fork ${{ inputs.version }}
+        files: dist/Bannerlator-Fork-${{ inputs.version }}-Standard-signed.apk
+        prerelease: false
+        make_latest: true
