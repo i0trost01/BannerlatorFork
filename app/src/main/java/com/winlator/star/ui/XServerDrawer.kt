@@ -12,6 +12,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -92,6 +93,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.ComposeView
@@ -117,6 +125,7 @@ import com.winlator.star.perf.RootManager
 import com.winlator.star.reshade.ReshadeLoadout
 import com.winlator.star.reshade.ReshadeManager
 import com.winlator.star.ui.components.ColorPicker
+import com.winlator.star.ui.components.drawerFocusRing
 import com.winlator.star.ui.screens.HelpDialog
 import com.winlator.star.ui.screens.MenuItemDivider
 import com.winlator.star.ui.screens.WatchdogSection
@@ -162,6 +171,10 @@ fun XServerDrawer() {
     val friendsUnread by com.winlator.star.store.SteamFriendsStore.unread.collectAsState()
     // Re-check the friends source on every drawer open (its liveness isn't all flow-driven).
     val menuOpen by XServerDialogState.menuOpen.collectAsState()
+    val rootFocus = remember { FocusRequester() }
+    LaunchedEffect(menuOpen) {
+        if (menuOpen) runCatching { rootFocus.requestFocus() }
+    }
     LaunchedEffect(menuOpen) { if (menuOpen) com.winlator.star.store.InGameFriendsSource.poke() }
     val pauseIcon = if (isPaused) R.drawable.icon_play else R.drawable.icon_pause
     val accent = MaterialTheme.colorScheme.primary
@@ -171,6 +184,15 @@ fun XServerDrawer() {
         modifier = Modifier
             .fillMaxHeight()
             .width(380.dp)
+            .focusRequester(rootFocus)
+            .focusable()
+            .onPreviewKeyEvent { e ->
+                if (e.type == KeyEventType.KeyDown &&
+                    (e.key == Key.Back || e.key == Key.Escape) &&
+                    XServerDrawerState.onClose != null) {
+                    XServerDrawerState.onClose!!.run(); true
+                } else false
+            }
             .background(surface)
     ) {
         BoxWithConstraints(
@@ -635,7 +657,8 @@ private fun TabIconButton(iconRes: Int, isSelected: Boolean, onClick: () -> Unit
             .clip(RoundedCornerShape(12.dp))
             .background(bgBrush, RoundedCornerShape(12.dp))
             .border(1.5.dp, borderColor, RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
+            .drawerFocusRing(accent),
         contentAlignment = Alignment.Center,
     ) {
         if (isSelected) {
@@ -677,7 +700,8 @@ private fun FpsTabButton(isSelected: Boolean, onClick: () -> Unit) {
             .clip(RoundedCornerShape(12.dp))
             .background(bgBrush, RoundedCornerShape(12.dp))
             .border(1.5.dp, borderColor, RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
+            .drawerFocusRing(accent),
         contentAlignment = Alignment.Center,
     ) {
         if (isSelected) {
@@ -719,7 +743,8 @@ private fun TvTabButton(isSelected: Boolean, onClick: () -> Unit) {
             .clip(RoundedCornerShape(12.dp))
             .background(bgBrush, RoundedCornerShape(12.dp))
             .border(1.5.dp, borderColor, RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
+            .drawerFocusRing(accent),
         contentAlignment = Alignment.Center,
     ) {
         if (isSelected) {
@@ -779,6 +804,7 @@ private fun ToggleRow(label: String, checked: Boolean, enabled: Boolean = true, 
             .clip(RoundedCornerShape(10.dp))
             .background(MaterialTheme.colorScheme.surface)
             .then(if (enabled) Modifier.clickable { onCheckedChange(!checked) } else Modifier.alpha(0.4f))
+            .drawerFocusRing(accent)
             .padding(horizontal = 12.dp, vertical = 10.dp)
     ) {
         Text(
@@ -847,7 +873,7 @@ private fun LabeledSlider(
                 activeTickColor = Color.Transparent,
                 inactiveTickColor = Color.Transparent,
             ),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().drawerFocusRing(accent)
         )
     }
 }
@@ -856,10 +882,11 @@ private fun LabeledSlider(
 
 @Composable
 private fun AccentButton(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val accent = MaterialTheme.colorScheme.primary
     val accentDim = LocalAccentDim.current
     Button(
         onClick = onClick,
-        modifier = modifier.fillMaxWidth().height(42.dp),
+        modifier = modifier.fillMaxWidth().height(42.dp).drawerFocusRing(accent),
         shape = RoundedCornerShape(10.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = accentDim,
@@ -2841,6 +2868,7 @@ private fun ModeChipGrid(items: List<Triple<String, Boolean, () -> Unit>>, perRo
                                 shape = RoundedCornerShape(8.dp)
                             )
                             .clickable(enabled = chipEnabled) { onTap() }
+                            .drawerFocusRing(accent)
                             .padding(vertical = 9.dp)
                     ) {
                         Text(
@@ -2910,6 +2938,7 @@ private fun ToggleChipGrid(items: List<ToggleChipItem>, perRow: Int = 3) {
                                 if (item.enabled) Modifier.clickable { item.onToggle(!item.checked) }
                                 else Modifier.alpha(0.4f)
                             )
+                            .drawerFocusRing(accent)
                             .padding(horizontal = 6.dp, vertical = 9.dp)
                     ) {
                         Text(
@@ -3008,7 +3037,7 @@ private fun IntSlider(label: String, value: Int, valueRange: IntRange, onValueCh
             valueRange = valueRange.first.toFloat()..valueRange.last.toFloat(),
             steps = sliderSteps,
             enabled = enabled,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().drawerFocusRing(accent)
         )
     }
 }
@@ -3500,6 +3529,7 @@ private fun CollapsibleSection(
 ) {
     var expanded by rememberSaveable(title) { mutableStateOf(initiallyExpanded) }
     val chevronRotation by animateFloatAsState(if (expanded) 90f else 0f, label = "hudSectionChevron")
+    val accent = MaterialTheme.colorScheme.primary
     Column {
         HorizontalDivider(color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 6.dp))
         Row(
@@ -3507,6 +3537,7 @@ private fun CollapsibleSection(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { expanded = !expanded }
+                .drawerFocusRing(accent)
                 .padding(vertical = 14.dp, horizontal = 2.dp)
         ) {
             Text(
