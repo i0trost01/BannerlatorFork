@@ -327,6 +327,7 @@ fun ShortcutsScreen(vm: ShortcutsViewModel = viewModel()) {
     var selectionMode by remember { mutableStateOf(false) }
     var selectedPaths by remember { mutableStateOf(setOf<String>()) }
     var confirmRemoveSelected by remember { mutableStateOf(false) }
+    var confirmExportAllSteam by remember { mutableStateOf(false) }
     var cloneTarget by remember { mutableStateOf<Shortcut?>(null) }
     // Save Backup (custom-import games): a picked .zip awaiting a target-container choice, plus the
     // label of the game the restore was launched from (shown in the container picker title).
@@ -1004,6 +1005,13 @@ fun ShortcutsScreen(vm: ShortcutsViewModel = viewModel()) {
                         else DangerRed,
                     )
                 }
+            }
+            IconButton(onClick = { confirmExportAllSteam = true }) {
+                Icon(
+                    imageVector = Icons.Filled.Upload,
+                    contentDescription = "Export all Steam shortcuts",
+                    tint = androidx.compose.ui.graphics.Color.White,
+                )
             }
             IconButton(onClick = {
                 selectionMode = !selectionMode
@@ -1801,6 +1809,29 @@ fun ShortcutsScreen(vm: ShortcutsViewModel = viewModel()) {
             },
             dismissButton = {
                 TextButton(onClick = { confirmRemoveSelected = false }) { Text("Cancel") }
+            },
+        )
+    }
+
+    if (confirmExportAllSteam) {
+        val steamShortcuts = shortcuts.filter { isSteamOriginShortcut(it) && steamAppIdOf(it) != 0 }
+        OutlinedAlertDialog(
+            onDismissRequest = { confirmExportAllSteam = false },
+            title = { Text("Export ${steamShortcuts.size} Steam shortcut${if (steamShortcuts.size == 1) "" else "s"}?") },
+            text = { Text("Writes each game's .desktop, .steam, .steamappid and boxart PNG into the configured export folder.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmExportAllSteam = false
+                    steamShortcuts.forEach { exportShortcut(context, it) }
+                    Toast.makeText(
+                        context,
+                        "Exported ${steamShortcuts.size} Steam shortcut${if (steamShortcuts.size == 1) "" else "s"}.",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }) { Text("Export") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmExportAllSteam = false }) { Text("Cancel") }
             },
         )
     }
