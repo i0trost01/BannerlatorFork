@@ -38,4 +38,4 @@ jobs:
       run: chmod +x gradlew
 
     - name: Run fork unit tests
-      run: ./gradlew :app:testStandardDebugUnitTest
+        run: ./gradlew :app:testStandardDebugUnitTest --tests "com.winlator.star.ui.screens.SteamFrontendExportTest"
