@@ -1,0 +1,41 @@
+name: fork-ci
+
+# Fork-only test gate. This machine has no Android SDK, so the JVM unit tests
+# cannot run locally — this is the only place they execute. Mirrors only the
+# setup the test needs from _build.yml (checkout+submodules, JDK 17, setup-gradle).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+
+jobs:
+  unit-test:
+    runs-on: ubuntu-22.04
+
+    steps:
+    - name: Clone repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+        fetch-depth: 1
+
+    - name: Set up JDK 17 (preinstalled toolchain, no apt)
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: '17'
+
+    - name: Set up Gradle (dependency + build cache)
+      uses: gradle/actions/setup-gradle@v4
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+
+    - name: Run fork unit tests
+      run: ./gradlew :app:testStandardDebugUnitTest
