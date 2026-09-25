@@ -12651,6 +12651,18 @@ public class XServerDisplayActivity extends AppCompatActivity {
             super.dispatchKeyEvent(event);
             return true;
         }
+        // Controller/system Back toggles the in-game drawer. Handled here (not only in
+        // onBackPressed) because a controller-originated BACK is otherwise routed to the guest
+        // by the input fallbacks below and never reaches the framework's back handling.
+        if (event.getKeyCode() == KeyEvent.KEYCODE_BACK && event.getAction() == KeyEvent.ACTION_DOWN
+                && environment != null && inGameControlsEditor == null) {
+            if (!drawerLayout.isDrawerOpen(GravityCompat.START)) {
+                drawerLayout.openDrawer(GravityCompat.START);
+            } else {
+                drawerLayout.closeDrawers();
+            }
+            return true;
+        }
         // A physical pad moving/pressing: the player is not using the pointer, so let the Wayland
         // overlay cursor hide (see waylandCursorPoke).
         if (waylandMode) {
