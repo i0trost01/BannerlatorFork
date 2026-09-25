@@ -270,6 +270,7 @@ public class XServerDisplayActivity extends AppCompatActivity {
 
     private XEnvironment environment;
     private DrawerLayout drawerLayout;
+    private ComposeView drawerComposeView;
     private ContainerManager containerManager;
     protected Container container;
     private XServer xServer;
@@ -1924,6 +1925,10 @@ public class XServerDisplayActivity extends AppCompatActivity {
                 if (winHandler != null) {
                     winHandler.neutralizeControllers();
                 }
+                if (drawerComposeView != null) {
+                    drawerComposeView.setFocusableInTouchMode(true);
+                    drawerComposeView.requestFocus();
+                }
             }
             @Override public void onDrawerClosed(@NonNull View drawerView) {
                 XServerDialogState.INSTANCE.setMenuOpen(false);
@@ -2414,7 +2419,8 @@ public class XServerDisplayActivity extends AppCompatActivity {
 
         if (inputControlsView != null) inputControlsView.setVisualStyle(VisualStyle.GAMEHUB);
 
-        ComposeView drawerComposeView = findViewById(R.id.XServerDrawerComposeView);
+        drawerComposeView = findViewById(R.id.XServerDrawerComposeView);
+        ComposeView drawerComposeView = this.drawerComposeView;
         XServerDrawerKt.setupComposeView(drawerComposeView);
 
         // Dialog host: a full-size ComposeView on top of the game surface for
@@ -12662,6 +12668,22 @@ public class XServerDisplayActivity extends AppCompatActivity {
                 drawerLayout.closeDrawers();
             }
             return true;
+        }
+        // While the drawer is open, a controller drives the drawer, not the guest. Compose's
+        // focus system handles D-pad traversal; A is remapped to DPAD_CENTER so the focused item
+        // activates; B closes the drawer. Nothing here reaches winHandler/xServer.
+        if (drawerLayout != null && drawerLayout.isDrawerOpen(GravityCompat.START)
+                && event.getDevice() != null
+                && ExternalController.isGameController(event.getDevice())) {
+            int kc = event.getKeyCode();
+            if (kc == KeyEvent.KEYCODE_BUTTON_B) {
+                if (event.getAction() == KeyEvent.ACTION_DOWN) drawerLayout.closeDrawers();
+                return true;
+            }
+            if (kc == KeyEvent.KEYCODE_BUTTON_A) {
+                return super.dispatchKeyEvent(new KeyEvent(event.getAction(), KeyEvent.KEYCODE_DPAD_CENTER));
+            }
+            return super.dispatchKeyEvent(event);
         }
         // A physical pad moving/pressing: the player is not using the pointer, so let the Wayland
         // overlay cursor hide (see waylandCursorPoke).
