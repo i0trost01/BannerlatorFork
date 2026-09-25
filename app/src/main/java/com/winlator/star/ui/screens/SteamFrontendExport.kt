@@ -10,4 +10,6 @@ object SteamFrontendExport {
     fun desktopBaseName(desktopFileName: String): String = desktopFileName.removeSuffix(".desktop")
 
     fun companionNames(base: String): List<String> = listOf("$base.steam", "$base.steamappid")
+
+    fun boxArtName(base: String): String = "$base.png"
 }

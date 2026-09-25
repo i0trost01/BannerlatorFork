@@ -18,4 +18,8 @@ class SteamFrontendExportTest {
             SteamFrontendExport.companionNames("Hades"),
         )
     }
+
+    @Test fun boxArtNameIsPng() {
+        assertEquals("Hades.png", SteamFrontendExport.boxArtName("Hades"))
+    }
 }

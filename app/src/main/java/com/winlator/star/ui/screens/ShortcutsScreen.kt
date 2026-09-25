@@ -9829,6 +9829,52 @@ private fun addToHomeScreen(context: Context, shortcut: Shortcut) {
     } catch (_: Exception) {}
 }
 
+/**
+ * For a Steam shortcut with a numeric app id, writes the GameNative/Daijisho companion files next to
+ * the exported .desktop: `<base>.steam` and (for Daijisho's stock Steam platform) `<base>.steamappid`.
+ * Content is the bare numeric app id. Returns true when at least one file was written.
+ */
+private fun writeSteamCompanions(context: Context, shortcut: Shortcut, dir: File): Boolean {
+    if (!isSteamOriginShortcut(shortcut)) return false
+    val appId = steamAppIdOf(shortcut)
+    if (appId == 0) return false
+    val base = SteamFrontendExport.desktopBaseName(shortcut.file.name)
+    var wrote = false
+    for (name in SteamFrontendExport.companionNames(base)) {
+        try {
+            FileWriter(File(dir, name), false).use { it.write(appId.toString()) }
+            wrote = true
+        } catch (_: IOException) {
+            Toast.makeText(context, "Failed to write $name", Toast.LENGTH_SHORT).show()
+        }
+    }
+    return wrote
+}
+
+/**
+ * Writes the shortcut's currently-selected boxart as `<base>.png` next to the .desktop so frontends
+ * (and Daijisho) show the same cover the app shows. First hit wins: the user's custom cover-art file,
+ * else the loaded cover-art bitmap. Returns true when a PNG was written.
+ */
+private fun writeBoxArtPng(shortcut: Shortcut, dir: File): Boolean {
+    val base = SteamFrontendExport.desktopBaseName(shortcut.file.name)
+    val out = File(dir, SteamFrontendExport.boxArtName(base))
+    val custom = shortcut.getCustomCoverArtPath()
+    if (!custom.isNullOrEmpty()) {
+        val src = File(custom)
+        if (src.isFile) {
+            return try {
+                src.copyTo(out, overwrite = true)
+                true
+            } catch (_: IOException) {
+                false
+            }
+        }
+    }
+    val art = shortcut.getCoverArt()
+    return art != null && !art.isRecycled && FileUtils.saveBitmapToFile(art, out)
+}
+
 private fun exportShortcut(context: Context, shortcut: Shortcut) {
     val prefs: SharedPreferences = PreferenceManager.getDefaultSharedPreferences(context)
     val uriString = prefs.getString("shortcuts_export_path_uri", null)
@@ -9871,6 +9917,9 @@ private fun exportShortcut(context: Context, shortcut: Shortcut) {
         FileWriter(exportFile, false).use { w ->
             lines.forEach { w.write("$it\n") }
         }
+
+        writeSteamCompanions(context, shortcut, shortcutsDir)
+        writeBoxArtPng(shortcut, shortcutsDir)
 
         Toast.makeText(
             context,
