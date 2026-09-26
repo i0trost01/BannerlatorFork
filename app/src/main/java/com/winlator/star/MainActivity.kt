@@ -430,7 +430,6 @@ class MainActivity : AppCompatActivity() {
         val appId = (Regex("(\\d+)\\s*$").find(raw)?.groupValues?.get(1)
             ?: raw.takeIf { it.toIntOrNull() != null }).orEmpty()
         if (appId.isEmpty()) return null
-        android.util.Log.d("FrontendLaunch", "GameNative file $filePath -> appid=$appId")
         return runCatching {
             containerManager.reloadContainers()
             containerManager.loadShortcuts().firstOrNull {
