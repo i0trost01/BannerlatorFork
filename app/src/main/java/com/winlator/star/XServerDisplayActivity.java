@@ -5521,13 +5521,14 @@ public class XServerDisplayActivity extends AppCompatActivity {
                         SharedPreferences savePrefs = getSharedPreferences("save_manager_prefs", MODE_PRIVATE);
                         if (isGenuineSteamShortcut()) {
                             if (savePrefs.getBoolean("auto_collect_steam_on_exit", true)) autoCollectSteamSavesBlocking();
-                            // Additionally push to Steam Cloud (opt-in) — ONLY once the user has accepted
-                            // the third-party cloud disclaimer (steam_prefs). Absent flag → skip; we never
-                            // auto-upload to a real Steam Cloud without consent. The local Collect above
-                            // stays unconditional (independent of this cloud toggle).
-                            boolean cloudDisclaimerOk = getSharedPreferences("steam_prefs", MODE_PRIVATE)
-                                    .getBoolean("cloud_saves_disclaimer_accepted", false);
-                            if (cloudDisclaimerOk && savePrefs.getBoolean("auto_upload_steam_on_exit", true))
+                            // Additionally push to Steam Cloud (opt-in). The Save Manager toggle
+                            // "Steam games: auto-upload to cloud on exit" (save_manager_prefs) IS the user's
+                            // consent: enabling it on that screen is an explicit opt-in, so the exit path must
+                            // honor it directly. (The separate steam_prefs cloud_saves_disclaimer_accepted flag
+                            // still gates the game detail page's cloud actions, which show their own disclaimer
+                            // dialog; it deliberately does NOT gate this exit auto-upload.) The local Collect
+                            // above stays unconditional.
+                            if (savePrefs.getBoolean("auto_upload_steam_on_exit", true))
                                 autoUploadSteamSavesBlocking();
                         } else {
                             // GOG-library games (untagged, installed under gog_games/) push their saves to
