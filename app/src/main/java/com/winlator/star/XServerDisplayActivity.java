@@ -273,7 +273,7 @@ public class XServerDisplayActivity extends AppCompatActivity {
 
     // Drawer controller navigation: the AYN Odin's built-in pad reports its D-pad as AXIS_HAT_X/Y
     // and the left stick as AXIS_X/Y, both as generic motion. While the drawer is open those are
-    // translated into synthetic D-pad key taps so Compose focus traversal (and the focus ring) work;
+    // translated into synthetic D-pad key taps that handleControllerMenuKey turns into rail/panel moves;
     // the drawer consumes the motion instead of leaking it to the guest. Held directions auto-repeat.
     private static final float DRAWER_STICK_DEADZONE = 0.5f;
     private static final long DRAWER_STICK_FIRST_DELAY_MS = 250L;
@@ -12734,7 +12734,7 @@ public class XServerDisplayActivity extends AppCompatActivity {
 
     /**
      * Left stick (AXIS_X/Y) and D-pad hat (AXIS_HAT_X/Y) past the deadzone become D-pad key taps
-     * while the drawer is open, so the controller moves Compose focus. Returns true: the motion is
+     * while the drawer is open, so handleControllerMenuKey moves the rail/panel highlight. Returns true: the motion is
      * owned by the drawer and must not reach the guest.
      */
     private boolean translateDrawerControllerMotion(MotionEvent event) {
@@ -12756,7 +12756,7 @@ public class XServerDisplayActivity extends AppCompatActivity {
             return true;
         }
         // While the drawer is open, a controller must not drive the guest. Translate the left
-        // stick / D-pad hat into synthetic D-pad keys so Compose focus traversal works, and
+        // stick / D-pad hat into synthetic D-pad keys consumed by handleControllerMenuKey, and
         // consume the motion (sticks/triggers) so only the key-based navigation applies.
         if (drawerLayout != null && drawerLayout.isDrawerOpen(GravityCompat.START)
                 && event.getDevice() != null
