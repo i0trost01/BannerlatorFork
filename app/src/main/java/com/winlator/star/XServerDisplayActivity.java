@@ -12864,10 +12864,9 @@ public class XServerDisplayActivity extends AppCompatActivity {
                 t.show();
             }
         }
-        // In-game drawer opener — WinNative parity (system Back handler), gated to the handheld's
-        // PHYSICAL Back/Return button. The Odin delivers B as KEYCODE_BACK too (kc=4 scan=305) as
-        // well as a distinct KEYCODE_BUTTON_B (kc=97 scan=305); matching on the scan code lets the
-        // Back button open the panel while B stays a pure game button.
+        // ---- Drawer opener (checked FIRST, before any swallow/forward rule below) ----
+        // The handheld's physical Back/Return button (kc=4 scan=157) toggles the drawer. Matched on
+        // the scan code so the pad's B, which some ROMs also deliver as KEYCODE_BACK, is excluded.
         if (event.getKeyCode() == KeyEvent.KEYCODE_BACK
                 && event.getAction() == KeyEvent.ACTION_DOWN
                 && event.getScanCode() == BACK_BUTTON_SCAN_CODE
@@ -12879,9 +12878,26 @@ public class XServerDisplayActivity extends AppCompatActivity {
             }
             return true;
         }
-        // A controller BACK/B that is NOT the physical Back button (e.g. the pad's B) is a game
-        // input — forward it and never let it reach Android's back handling (which would toggle the
-        // drawer via onBackPressed).
+        // While the drawer is open, a controller drives the drawer, not the guest. Compose's
+        // focus system handles D-pad traversal; A is remapped to DPAD_CENTER so the focused item
+        // activates; B closes the drawer. Nothing here reaches winHandler/xServer.
+        if (drawerLayout != null && drawerLayout.isDrawerOpen(GravityCompat.START)
+                && event.getDevice() != null
+                && ExternalController.isGameController(event.getDevice())) {
+            int kc = event.getKeyCode();
+            if (kc == KeyEvent.KEYCODE_BUTTON_B) {
+                if (event.getAction() == KeyEvent.ACTION_DOWN) drawerLayout.closeDrawers();
+                return true;
+            }
+            if (kc == KeyEvent.KEYCODE_BUTTON_A) {
+                dispatchToDrawer(new KeyEvent(event.getAction(), KeyEvent.KEYCODE_DPAD_CENTER));
+                return true;
+            }
+            dispatchToDrawer(event);
+            return true;
+        }
+        // A controller BACK that is NOT the physical Back button is the pad's B — forward it to the
+        // game so it never reaches Android's back handling (which would toggle the drawer).
         if (event.getKeyCode() == KeyEvent.KEYCODE_BACK
                 && event.getDevice() != null
                 && ExternalController.isGameController(event.getDevice())
@@ -12891,7 +12907,7 @@ public class XServerDisplayActivity extends AppCompatActivity {
             if (xServer != null && xServer.keyboard != null && xServer.keyboard.onKeyEvent(event)) return true;
             return true;
         }
-        // Secondary opener for pads that have a dedicated Guide/Mode button: HOLD it (~0.5 s).
+        // Secondary opener for pads with a dedicated Guide/Mode button: HOLD it (~0.5 s).
         if (event.getKeyCode() == KeyEvent.KEYCODE_BUTTON_MODE
                 && environment != null && inGameControlsEditor == null) {
             if (event.getAction() == KeyEvent.ACTION_DOWN) {
@@ -12916,26 +12932,6 @@ public class XServerDisplayActivity extends AppCompatActivity {
                     || event.getKeyCode() == KeyEvent.KEYCODE_BUTTON_SELECT)
                 && environment != null && inGameControlsEditor == null) {
             return true; // swallow Home/Select, per WinNative
-        }
-        // While the drawer is open, a controller drives the drawer, not the guest. Compose's
-        // focus system handles D-pad traversal; A is remapped to DPAD_CENTER so the focused item
-        // activates; B closes the drawer. Nothing here reaches winHandler/xServer.
-        if (drawerLayout != null && drawerLayout.isDrawerOpen(GravityCompat.START)
-                && event.getDevice() != null
-                && ExternalController.isGameController(event.getDevice())) {
-            int kc = event.getKeyCode();
-            if (kc == KeyEvent.KEYCODE_BUTTON_B) {
-                if (event.getAction() == KeyEvent.ACTION_DOWN) drawerLayout.closeDrawers();
-                return true;
-            }
-            if (kc == KeyEvent.KEYCODE_BUTTON_A) {
-                // Route to the drawer's ComposeView so the focused clickable activates.
-                dispatchToDrawer(new KeyEvent(event.getAction(), KeyEvent.KEYCODE_DPAD_CENTER));
-                return true;
-            }
-            // D-pad etc.: deliver straight to the drawer so Compose focus traversal runs.
-            dispatchToDrawer(event);
-            return true;
         }
         // A physical pad moving/pressing: the player is not using the pointer, so let the Wayland
         // overlay cursor hide (see waylandCursorPoke).
