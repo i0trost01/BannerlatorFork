@@ -12738,16 +12738,32 @@ public class XServerDisplayActivity extends AppCompatActivity {
             super.dispatchKeyEvent(event);
             return true;
         }
-        // Controller/system Back toggles the in-game drawer. Handled here (not only in
-        // onBackPressed) because a controller-originated BACK is otherwise routed to the guest
-        // by the input fallbacks below and never reaches the framework's back handling.
-        if (event.getKeyCode() == KeyEvent.KEYCODE_BACK && event.getAction() == KeyEvent.ACTION_DOWN
+        // The gamepad's Home/Guide/Select button opens/closes the in-game drawer. Handled here,
+        // before the guest input fallbacks, so it never reaches the game.
+        if (event.getAction() == KeyEvent.ACTION_DOWN
+                && (event.getKeyCode() == KeyEvent.KEYCODE_BUTTON_MODE
+                    || event.getKeyCode() == KeyEvent.KEYCODE_HOME
+                    || event.getKeyCode() == KeyEvent.KEYCODE_BUTTON_SELECT)
                 && environment != null && inGameControlsEditor == null) {
             if (!drawerLayout.isDrawerOpen(GravityCompat.START)) {
                 drawerLayout.openDrawer(GravityCompat.START);
             } else {
                 drawerLayout.closeDrawers();
             }
+            return true;
+        }
+        // A controller-originated BACK IS the pad's own B/Return button on handhelds whose ROM
+        // maps B to Back. Route it to the game as a normal input and consume it, so it never
+        // reaches Android's window back handling (onBackPressed -> drawer toggle) — otherwise the
+        // pad's B button becomes unusable in-game. System BACK from a non-controller source still
+        // toggles the drawer via onBackPressed().
+        if (event.getKeyCode() == KeyEvent.KEYCODE_BACK
+                && event.getDevice() != null
+                && ExternalController.isGameController(event.getDevice())
+                && environment != null && inGameControlsEditor == null) {
+            if (inputControlsView != null && inputControlsView.onKeyEvent(event)) return true;
+            if (winHandler != null && winHandler.onKeyEvent(event)) return true;
+            if (xServer != null && xServer.keyboard.onKeyEvent(event)) return true;
             return true;
         }
         // While the drawer is open, a controller drives the drawer, not the guest. Compose's
