@@ -92,6 +92,14 @@ public class DrawerRegressionGuardTest {
         assertTrue("the drawer must react to the activation signal", src.contains("activateSignal"));
     }
 
+    @Test public void stickMotionUsesTheControllerMenuHandler() throws Exception {
+        String src = activitySource();
+        assertTrue("stick/hat translation must drive the controller menu handler",
+                src.contains("handleControllerMenuKey(keyCode, true)"));
+        assertFalse("stick/hat must no longer dispatch synthetic keys into the ComposeView",
+                src.contains("dispatchToDrawer(new KeyEvent"));
+    }
+
     @Test public void drawerExposesPanelNavigationHelper() throws Exception {
         String src = drawerSource();
         assertTrue("the drawer must expose a panel cell helper",

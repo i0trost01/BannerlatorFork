@@ -12693,21 +12693,9 @@ public class XServerDisplayActivity extends AppCompatActivity {
         }
     }
 }
-    /** Sends a synthetic D-pad DOWN+UP pair — one move the Compose focus system reacts to. */
+    /** One D-pad move for the analog stick / hat, driven through the same path as a physical D-pad. */
     private void sendDrawerDpadTap(int keyCode) {
-        long t = android.os.SystemClock.uptimeMillis();
-        dispatchToDrawer(new KeyEvent(t, t, KeyEvent.ACTION_DOWN, keyCode, 0));
-        dispatchToDrawer(new KeyEvent(t, t, KeyEvent.ACTION_UP, keyCode, 0));
-    }
-
-    /**
-     * Delivers a synthetic key straight to the drawer's ComposeView so Compose's focus system (which
-     * lives on the inner AndroidComposeView) sees it. Falling back to super only when the drawer view
-     * is absent — routing through the Activity can be swallowed by the game surface/overlay instead.
-     */
-    private void dispatchToDrawer(KeyEvent event) {
-        if (drawerComposeView != null) drawerComposeView.dispatchKeyEvent(event);
-        else super.dispatchKeyEvent(event);
+        handleControllerMenuKey(keyCode, true);
     }
 
     private Runnable drawerStickRepeatRunnable(final int dir, final int keyCode) {
