@@ -1066,6 +1066,14 @@ fun ShortcutsScreen(vm: ShortcutsViewModel = viewModel()) {
                             onClick = { vm.setSortOrder(order); showSortMenu = false },
                         )
                     }
+                    Divider()
+                    // Discoverability: the "Export all Steam" action also lives as a top-bar icon,
+                    // but the bar is crowded on a handheld, so surface it by name here too.
+                    DropdownMenuItem(
+                        text = { Text("Export all Steam shortcuts") },
+                        leadingIcon = { Icon(Icons.Filled.Upload, contentDescription = null) },
+                        onClick = { showSortMenu = false; confirmExportAllSteam = true },
+                    )
                 }
             }
         }
