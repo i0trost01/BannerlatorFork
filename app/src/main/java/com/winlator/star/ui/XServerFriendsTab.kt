@@ -90,7 +90,7 @@ private const val HELP_TEXT =
 
 /** Rail button: the TabIconButton look with a People glyph and an unread dot in the corner. */
 @Composable
-internal fun FriendsTabButton(isSelected: Boolean, unread: Boolean, onClick: () -> Unit) {
+internal fun FriendsTabButton(isSelected: Boolean, unread: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val accent = MaterialTheme.colorScheme.primary
     val accentDim = LocalAccentDim.current
     val bgBrush = if (isSelected)
@@ -103,6 +103,7 @@ internal fun FriendsTabButton(isSelected: Boolean, unread: Boolean, onClick: () 
 
     Box(
         modifier = Modifier
+            .then(modifier)
             .size(44.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(bgBrush, RoundedCornerShape(12.dp))

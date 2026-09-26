@@ -118,6 +118,7 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import com.winlator.star.R
 import com.winlator.star.container.Container
+import com.winlator.star.inputcontrols.DrawerNavModel
 import com.winlator.star.perf.PerfGpuTurbo
 import com.winlator.star.perf.PerfRevertRegistry
 import com.winlator.star.perf.PerfRootApplier
@@ -160,6 +161,11 @@ fun setupComposeView(view: ComposeView) {
 @Composable
 fun XServerDrawer() {
     val state = XServerDrawerState
+    // Controller navigation: the Activity pushes positions here; this composable renders the
+    // highlight and performs the selection. Starts on the rail (level 0), index 0.
+    val navLevel = DrawerNavBridge.level
+    val navRailIndex = DrawerNavBridge.railIndex
+    val navActivateRail = DrawerNavBridge.activateSignal
     val selectedTab by state.selectedTab.collectAsState()
     val isPaused by state.isPaused.collectAsState()
     val tvConnected by state.tvConnected.collectAsState()
@@ -187,6 +193,19 @@ fun XServerDrawer() {
         }
     }
     LaunchedEffect(menuOpen) { if (menuOpen) com.winlator.star.store.InGameFriendsSource.poke() }
+    // A on the rail: select whatever the highlight is on. Mirrors the tap path exactly.
+    LaunchedEffect(navActivateRail) {
+        if (navActivateRail == 0) return@LaunchedEffect
+        if (DrawerNavBridge.level != DrawerNavModel.LEVEL_RAIL) return@LaunchedEffect
+        val railOrder = listOf(
+            TabType.GRAPHICS, TabType.HUD, TabType.RESHADE, TabType.CONTROLS,
+            TabType.AUDIO, TabType.ADVANCED,
+        ) + (if (friendsSource.tabVisible) listOf(TabType.FRIENDS) else emptyList()) +
+            (if (com.winlator.star.FeatureFlags.TV_OUTPUT_ENABLED && (tvConnected || castSupported)) {
+                listOf(TabType.TV)
+            } else emptyList())
+        railOrder.getOrNull(DrawerNavBridge.railIndex)?.let { handleTabClick(it, state) }
+    }
     val pauseIcon = if (isPaused) R.drawable.icon_play else R.drawable.icon_pause
     val accent = MaterialTheme.colorScheme.primary
     val surface = MaterialTheme.colorScheme.surface
@@ -229,29 +248,38 @@ fun XServerDrawer() {
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.SpaceEvenly,
                 ) {
-                    // Top group: section tabs
+                    // Top group: section tabs. railIndex counts these in this exact order
+                    // (FRIENDS and TV are conditional, so the index must be assigned at
+                    // composition time, not hard-coded).
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        TabIconButton(R.drawable.icon_display, selectedTab == TabType.GRAPHICS, Modifier.focusRequester(firstFocus)) {
+                        var railIndex = 0
+                        TabIconButton(R.drawable.icon_display, selectedTab == TabType.GRAPHICS,
+                            Modifier.focusRequester(firstFocus).railControllerHighlight(railIndex++, accent)) {
                             handleTabClick(TabType.GRAPHICS, state)
                         }
                         Spacer(Modifier.height(6.dp))
-                        FpsTabButton(isSelected = selectedTab == TabType.HUD) {
+                        FpsTabButton(isSelected = selectedTab == TabType.HUD,
+                            modifier = Modifier.railControllerHighlight(railIndex++, accent)) {
                             handleTabClick(TabType.HUD, state)
                         }
                         Spacer(Modifier.height(6.dp))
-                        TabIconButton(R.drawable.icon_screen_effect, selectedTab == TabType.RESHADE) {
+                        TabIconButton(R.drawable.icon_screen_effect, selectedTab == TabType.RESHADE,
+                            Modifier.railControllerHighlight(railIndex++, accent)) {
                             handleTabClick(TabType.RESHADE, state)
                         }
                         Spacer(Modifier.height(6.dp))
-                        TabIconButton(R.drawable.icon_input_controls, selectedTab == TabType.CONTROLS) {
+                        TabIconButton(R.drawable.icon_input_controls, selectedTab == TabType.CONTROLS,
+                            Modifier.railControllerHighlight(railIndex++, accent)) {
                             handleTabClick(TabType.CONTROLS, state)
                         }
                         Spacer(Modifier.height(6.dp))
-                        TabIconButton(R.drawable.icon_audio, selectedTab == TabType.AUDIO) {
+                        TabIconButton(R.drawable.icon_audio, selectedTab == TabType.AUDIO,
+                            Modifier.railControllerHighlight(railIndex++, accent)) {
                             handleTabClick(TabType.AUDIO, state)
                         }
                         Spacer(Modifier.height(6.dp))
-                        TabIconButton(R.drawable.icon_debug, selectedTab == TabType.ADVANCED) {
+                        TabIconButton(R.drawable.icon_debug, selectedTab == TabType.ADVANCED,
+                            Modifier.railControllerHighlight(railIndex++, accent)) {
                             handleTabClick(TabType.ADVANCED, state)
                         }
                         if (friendsSource.tabVisible) {
@@ -259,6 +287,7 @@ fun XServerDrawer() {
                             FriendsTabButton(
                                 isSelected = selectedTab == TabType.FRIENDS,
                                 unread = friendsUnread.values.any { it > 0 },
+                                modifier = Modifier.railControllerHighlight(railIndex++, accent),
                             ) {
                                 handleTabClick(TabType.FRIENDS, state)
                             }
@@ -270,10 +299,12 @@ fun XServerDrawer() {
                         // never being constructed (which already leaves tvConnected/castSupported false).
                         if (com.winlator.star.FeatureFlags.TV_OUTPUT_ENABLED && (tvConnected || castSupported)) {
                             Spacer(Modifier.height(6.dp))
-                            TvTabButton(selectedTab == TabType.TV) {
+                            TvTabButton(selectedTab == TabType.TV,
+                                modifier = Modifier.railControllerHighlight(railIndex++, accent)) {
                                 handleTabClick(TabType.TV, state)
                             }
                         }
+                        LaunchedEffect(railIndex) { DrawerNavBridge.railCount = railIndex }
                     }
 
                     // Bottom group: task manager / pause / exit
@@ -643,6 +674,16 @@ private fun TvContent(state: XServerDrawerState) {
 
 // ───── Modern Tab Button ─────
 
+/** Draws the controller-navigation ring on the rail entry the Activity is currently on. */
+@Composable
+private fun Modifier.railControllerHighlight(index: Int, accent: Color): Modifier {
+    val highlighted = DrawerNavBridge.level == DrawerNavModel.LEVEL_RAIL &&
+        DrawerNavBridge.railIndex == index
+    return this.then(
+        if (highlighted) Modifier.border(2.dp, accent, RoundedCornerShape(14.dp)) else Modifier
+    )
+}
+
 @Composable
 private fun TabIconButton(iconRes: Int, isSelected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val accent = MaterialTheme.colorScheme.primary
@@ -688,7 +729,7 @@ private fun TabIconButton(iconRes: Int, isSelected: Boolean, modifier: Modifier 
 }
 
 @Composable
-private fun FpsTabButton(isSelected: Boolean, onClick: () -> Unit) {
+private fun FpsTabButton(isSelected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val accent = MaterialTheme.colorScheme.primary
     val accentDim = LocalAccentDim.current
     // Selected = filled accent pill (accent → dim), matching the rebuild preview.
@@ -702,6 +743,7 @@ private fun FpsTabButton(isSelected: Boolean, onClick: () -> Unit) {
 
     Box(
         modifier = Modifier
+            .then(modifier)
             .size(44.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(bgBrush, RoundedCornerShape(12.dp))
@@ -732,7 +774,7 @@ private fun FpsTabButton(isSelected: Boolean, onClick: () -> Unit) {
 
 // TV tab: a text "TV" pill (mirrors the FPS tab) instead of an icon.
 @Composable
-private fun TvTabButton(isSelected: Boolean, onClick: () -> Unit) {
+private fun TvTabButton(isSelected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val accent = MaterialTheme.colorScheme.primary
     val accentDim = LocalAccentDim.current
     val bgBrush = if (isSelected)
@@ -745,6 +787,7 @@ private fun TvTabButton(isSelected: Boolean, onClick: () -> Unit) {
 
     Box(
         modifier = Modifier
+            .then(modifier)
             .size(44.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(bgBrush, RoundedCornerShape(12.dp))

@@ -75,4 +75,13 @@ public class DrawerRegressionGuardTest {
         assertFalse("KEYCODE_BACK must NOT be redirected into the controller menu handler",
                 src.contains("handleControllerMenuKey(KeyEvent.KEYCODE_BACK"));
     }
+
+    @Test public void drawerReadsTheNavBridge() throws Exception {
+        File f = new File("src/main/java/com/winlator/star/ui/XServerDrawer.kt");
+        if (!f.isFile()) f = new File("app/src/main/java/com/winlator/star/ui/XServerDrawer.kt");
+        String src = new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8);
+        assertTrue("the drawer must read the nav bridge", src.contains("DrawerNavBridge"));
+        assertTrue("the drawer must report its rail count", src.contains("railCount"));
+        assertTrue("the drawer must react to the activation signal", src.contains("activateSignal"));
+    }
 }
