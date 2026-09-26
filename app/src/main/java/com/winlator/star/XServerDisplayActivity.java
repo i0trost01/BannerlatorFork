@@ -280,36 +280,6 @@ public class XServerDisplayActivity extends AppCompatActivity {
     private final Runnable[] drawerStickRepeatRunnables = new Runnable[4];
     private final android.os.Handler drawerStickRepeatHandler = new android.os.Handler(android.os.Looper.getMainLooper());
 
-    // In-game drawer opener: the handheld's Back/Return button (and B, which the ROM maps to the same
-    // KEYCODE_BACK) opens the drawer on a HOLD, while a quick tap is forwarded to the game — so B stays
-    // usable in-game. On this device KEYCODE_BACK is the only reliably-delivered "menu" key (KEYCODE_HOME
-    // is consumed by Android before apps see it). WinNative's in-game menu uses the same hold-to-open idea.
-    private static final long DRAWER_BACK_HOLD_MS = 450L;
-    // The handheld's physical Back/Return button scan code (Odin 2 Portal: kc=4 scan=157). The
-    // drawer opener matches this so the pad's B (also KEYCODE_BACK on some ROMs) never opens it.
-    private static final int BACK_BUTTON_SCAN_CODE = 157;
-    private boolean drawerBackHoldPending = false;
-    private boolean drawerBackHoldFired = false;
-    private final android.os.Handler drawerBackHoldHandler = new android.os.Handler(android.os.Looper.getMainLooper());
-    private final Runnable drawerBackHoldRunnable = new Runnable() {
-        @Override public void run() {
-            drawerBackHoldFired = true;
-            if (drawerLayout != null && !drawerLayout.isDrawerOpen(GravityCompat.START)) {
-                drawerLayout.openDrawer(GravityCompat.START);
-            }
-        }
-    };
-
-    /** Forwards a quick Back tap to the game as DOWN+UP so the pad's B/Back stays a game input. */
-    private void forwardBackTapToGuest() {
-        long t = android.os.SystemClock.uptimeMillis();
-        KeyEvent down = new KeyEvent(t, t, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BACK, 0);
-        KeyEvent up = new KeyEvent(t, t, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BACK, 0);
-        if (inputControlsView != null && inputControlsView.onKeyEvent(down)) { inputControlsView.onKeyEvent(up); return; }
-        if (winHandler != null && winHandler.onKeyEvent(down)) { winHandler.onKeyEvent(up); return; }
-        if (xServer != null && xServer.keyboard != null && xServer.keyboard.onKeyEvent(down)) xServer.keyboard.onKeyEvent(up);
-    }
-
     private XEnvironment environment;
     private DrawerLayout drawerLayout;
     private ComposeView drawerComposeView;
@@ -12765,9 +12735,6 @@ public class XServerDisplayActivity extends AppCompatActivity {
     private void resetDrawerStickNavigation() {
         drawerStickRepeatHandler.removeCallbacksAndMessages(null);
         for (int i = 0; i < drawerStickHeld.length; i++) drawerStickHeld[i] = false;
-        drawerBackHoldHandler.removeCallbacksAndMessages(null);
-        drawerBackHoldPending = false;
-        drawerBackHoldFired = false;
     }
 
     /**
@@ -12857,49 +12824,8 @@ public class XServerDisplayActivity extends AppCompatActivity {
             super.dispatchKeyEvent(event);
             return true;
         }
-        // DIAGNOSTIC (temporary): show the key/scan code on screen for the "menu-ish" gamepad
-        // buttons, so we can tell the back button apart from B without adb. Press back once, then B.
-        if (event.getDevice() != null && ExternalController.isGameController(event.getDevice())) {
-            int dkc = event.getKeyCode();
-            android.util.Log.i("WinInput", "kc=" + dkc
-                    + " (" + KeyEvent.keyCodeToString(dkc) + ")"
-                    + " scan=" + event.getScanCode()
-                    + " act=" + event.getAction()
-                    + " dev=" + event.getDevice().getName());
-            if (event.getAction() == KeyEvent.ACTION_DOWN
-                    && (dkc == KeyEvent.KEYCODE_BACK || dkc == KeyEvent.KEYCODE_BUTTON_MODE
-                        || dkc == KeyEvent.KEYCODE_HOME || dkc == KeyEvent.KEYCODE_BUTTON_SELECT
-                        || dkc == KeyEvent.KEYCODE_BUTTON_B)) {
-                com.winlator.star.ui.GamepadKeyDiag.INSTANCE.record(
-                        "kc=" + dkc + " scan=" + event.getScanCode() + " " + KeyEvent.keyCodeToString(dkc));
-                // Custom, high-contrast toast — the default one renders dark-on-dark over the game.
-                android.widget.TextView tv = new android.widget.TextView(this);
-                tv.setText("kc=" + dkc + "  scan=" + event.getScanCode() + "  " + KeyEvent.keyCodeToString(dkc));
-                tv.setTextColor(android.graphics.Color.WHITE);
-                tv.setTextSize(20f);
-                tv.setPadding(40, 30, 40, 30);
-                tv.setBackgroundColor(android.graphics.Color.argb(235, 0, 0, 0));
-                android.widget.Toast t = new android.widget.Toast(this);
-                t.setView(tv);
-                t.setDuration(android.widget.Toast.LENGTH_LONG);
-                t.show();
-            }
-        }
-        // ---- Drawer OPENING is left entirely to onBackPressed() ----
-        // onBackPressed() is Bannerlator's equivalent of WinNative's handleNavigationBackPressed: it
-        // toggles the drawer. Intercepting KEYCODE_BACK here is what has been BLOCKING that path, so
-        // nothing below consumes BACK for the Back/Return button. The gamepad's B is a distinct
-        // KEYCODE_BUTTON_B, and on this pad may also arrive as KEYCODE_BACK (scan 305) — BOTH are
-        // matched here, but only while the drawer is OPEN (B closes it). When the drawer is closed
-        // this returns false, so B falls through to the game and never opens the panel.
-        boolean backFromGamepadB = event.getKeyCode() == KeyEvent.KEYCODE_BACK
-                && event.getScanCode() != BACK_BUTTON_SCAN_CODE;
-        if ((event.getKeyCode() == KeyEvent.KEYCODE_BUTTON_B || backFromGamepadB)
-                && event.getDevice() != null
-                && ExternalController.isGameController(event.getDevice())
-                && environment != null && inGameControlsEditor == null
-                && drawerLayout != null && drawerLayout.isDrawerOpen(GravityCompat.START)) {
-            if (event.getAction() == KeyEvent.ACTION_DOWN) drawerLayout.closeDrawers();
+        if (ExternalController.isGameController(event.getDevice())
+                && handleControllerMenuKey(event.getKeyCode(), event.getAction() == KeyEvent.ACTION_DOWN)) {
             return true;
         }
         // While the drawer is open, a controller drives the drawer, not the guest. Compose's
@@ -12919,26 +12845,6 @@ public class XServerDisplayActivity extends AppCompatActivity {
         // Everything else (including the pad's B, which arrives here as KEYCODE_BACK or
         // KEYCODE_BUTTON_B) falls through to the normal input path below — B is an ordinary game
         // button when the drawer is closed. It must NOT be consumed here, or the button dies.
-        // Secondary opener for pads with a dedicated Guide/Mode button: HOLD it (~0.5 s).
-        if (event.getKeyCode() == KeyEvent.KEYCODE_BUTTON_MODE
-                && environment != null && inGameControlsEditor == null) {
-            if (event.getAction() == KeyEvent.ACTION_DOWN) {
-                if (drawerLayout != null && drawerLayout.isDrawerOpen(GravityCompat.START)) {
-                    drawerLayout.closeDrawers();
-                } else if (!drawerBackHoldPending) {
-                    drawerBackHoldPending = true;
-                    drawerBackHoldFired = false;
-                    drawerBackHoldHandler.removeCallbacks(drawerBackHoldRunnable);
-                    drawerBackHoldHandler.postDelayed(drawerBackHoldRunnable, DRAWER_BACK_HOLD_MS);
-                }
-                return true;
-            } else if (event.getAction() == KeyEvent.ACTION_UP) {
-                drawerBackHoldHandler.removeCallbacks(drawerBackHoldRunnable);
-                drawerBackHoldPending = false;
-                drawerBackHoldFired = false;
-                return true;
-            }
-        }
         if (event.getAction() == KeyEvent.ACTION_DOWN
                 && (event.getKeyCode() == KeyEvent.KEYCODE_HOME
                     || event.getKeyCode() == KeyEvent.KEYCODE_BUTTON_SELECT)
@@ -13031,6 +12937,37 @@ public class XServerDisplayActivity extends AppCompatActivity {
         // Fallback to existing input handling
         return (!inputControlsView.onKeyEvent(event) && !winHandler.onKeyEvent(event) && xServer.keyboard.onKeyEvent(event)) ||
                 (!ExternalController.isGameController(event.getDevice()) && super.dispatchKeyEvent(event));
+    }
+
+    /**
+     * WinNative's handleControllerMenuKey: while the drawer is CLOSED this returns false for every
+     * controller button, so B (KEYCODE_BUTTON_B) and the rest fall straight through to the game.
+     * While the drawer is OPEN it owns the pad: B closes the drawer, A activates the focused item,
+     * and D-pad directions drive Compose focus. Back-to-open is NOT handled here — it arrives via the
+     * OnBackPressedDispatcher (see the addCallback in setupUI). Returns true when it consumed the event.
+     */
+    private boolean handleControllerMenuKey(int kc, boolean down) {
+        if (drawerLayout == null || environment == null || inGameControlsEditor != null) return false;
+        if (!drawerLayout.isDrawerOpen(GravityCompat.START)) return false;
+        if (kc == KeyEvent.KEYCODE_BUTTON_B) {
+            if (down) drawerLayout.closeDrawers();
+            return true;
+        }
+        if (down) {
+            if (kc == KeyEvent.KEYCODE_BUTTON_A) {
+                dispatchToDrawer(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_CENTER));
+                dispatchToDrawer(new KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_CENTER));
+            } else if (kc == KeyEvent.KEYCODE_DPAD_LEFT || kc == KeyEvent.KEYCODE_DPAD_RIGHT
+                    || kc == KeyEvent.KEYCODE_DPAD_UP || kc == KeyEvent.KEYCODE_DPAD_DOWN) {
+                dispatchToDrawer(new KeyEvent(KeyEvent.ACTION_DOWN, kc));
+                dispatchToDrawer(new KeyEvent(KeyEvent.ACTION_UP, kc));
+            } else {
+                dispatchToDrawer(new KeyEvent(KeyEvent.ACTION_DOWN, kc));
+            }
+        } else {
+            dispatchToDrawer(new KeyEvent(KeyEvent.ACTION_UP, kc));
+        }
+        return true;
     }
 
     /** Map an Android KeyEvent keyCode to a Linux evdev keycode (for wl_keyboard in wayland mode).
