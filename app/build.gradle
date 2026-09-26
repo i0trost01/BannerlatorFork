@@ -147,6 +147,13 @@ android {
         checkReleaseBuilds false
     }
 
+    testOptions {
+        unitTests {
+            includeAndroidResources = true
+            returnDefaultValues = true
+        }
+    }
+
     flavorDimensions "version"
     productFlavors {
         standard {
@@ -280,6 +287,11 @@ dependencies {
     // core's JSONObject calls run on the JVM instead of hitting android.jar's "not mocked" stubs.
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.json:json:20231013'
+    // Robolectric runs real Android framework classes (DrawerLayout, OnBackPressedDispatcher)
+    // on the JVM, so the drawer input behavior is EXECUTED in CI, not merely compiled.
+    testImplementation 'org.robolectric:robolectric:4.14.1'
+    testImplementation 'androidx.test:core:1.5.0'
+    testImplementation 'androidx.test.ext:junit:1.1.5'
     androidTestImplementation platform('androidx.compose:compose-bom:2024.02.00')
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
     androidTestImplementation 'androidx.test:runner:1.5.2'
