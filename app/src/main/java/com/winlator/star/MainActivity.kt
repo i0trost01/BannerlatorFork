@@ -343,6 +343,17 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // WinNative's middle step (resolveIncomingGameNativeFile): a front end may pass the exported
+        // GameNative-format file itself — `<Game>.steam` / `.steamappid` whose CONTENT is the numeric
+        // app id — as the intent data URI, a clip item, or an extra. Read the id out of the file and
+        // resolve the shortcut by it. This is the Daijisho Steam-platform route.
+        if (shortcutPath.isNullOrEmpty()) {
+            resolveIncomingGameNativeFile(src)?.let { sc ->
+                shortcutPath = sc.file.absolutePath
+                containerId = sc.container.id
+            }
+        }
+
         // WinNative parity: a front end may pass the exported `.desktop` itself as the intent DATA
         // (`-a android.intent.action.VIEW -d {file.uri}`). Resolve the URI to a real file path; if it
         // parses as a shortcut .desktop, hand it to the session activity the same way.
@@ -360,6 +371,76 @@ class MainActivity : AppCompatActivity() {
         })
         finish()
         return true
+    }
+
+    /**
+     * WinNative's `resolveIncomingGameNativeFile`: collect candidate URIs (data, clip items, any
+     * extra) and resolve the first one that is an exported GameNative-format file (`<Game>.steam`,
+     * `.steamappid`) whose content is the numeric app id.
+     */
+    private fun resolveIncomingGameNativeFile(source: Intent): com.winlator.star.container.Shortcut? {
+        val candidates = mutableListOf<Uri>()
+        source.data?.let { candidates.add(it) }
+        source.clipData?.let { clip ->
+            for (i in 0 until clip.itemCount) clip.getItemAt(i).uri?.let { candidates.add(it) }
+        }
+        source.extras?.let { extras ->
+            for (key in extras.keySet()) {
+                when (val v = extras.get(key)) {
+                    is Uri -> candidates.add(v)
+                    is String -> if (v.startsWith("content://") || v.startsWith("file://")) {
+                        runCatching { Uri.parse(v) }.getOrNull()?.let { candidates.add(it) }
+                    }
+                    else -> Unit
+                }
+            }
+        }
+        for (uri in candidates) {
+            val filePath = materializeGameNativeFileUri(uri) ?: continue
+            resolveGameNativeFile(filePath)?.let { return it }
+        }
+        return null
+    }
+
+    /** Resolve a URI to a real file path for a GameNative export (no `.desktop` content check). */
+    private fun materializeGameNativeFileUri(uri: Uri): String? {
+        when (uri.scheme?.lowercase()) {
+            "file" -> return uri.path?.takeIf { File(it).isFile }
+            "content" -> {
+                val resolved = FileUtils.getFilePathFromUri(this, uri)
+                if (!resolved.isNullOrEmpty() && File(resolved).isFile) return resolved
+                return runCatching {
+                    val out = File(cacheDir, "frontend_game_native.dat")
+                    val copied = contentResolver.openInputStream(uri)?.use { input ->
+                        out.outputStream().use { output -> input.copyTo(output) }; true
+                    } ?: false
+                    if (copied && out.isFile) out.absolutePath else null
+                }.getOrNull()
+            }
+        }
+        return null
+    }
+
+    /**
+     * Read an exported GameNative-format file (content = numeric app id) and resolve the matching
+     * Bannerlator Steam shortcut by `steamAppId`. (`<Game>.steam` and `<Game>.steamappid` are the
+     * Steam forms; this fork only ships Steam.)
+     */
+    private fun resolveGameNativeFile(filePath: String): com.winlator.star.container.Shortcut? {
+        val ext = filePath.substringAfterLast('.', "").lowercase()
+        if (ext != "steam" && ext != "steamappid") return null
+        val raw = runCatching { File(filePath).readText() }.getOrNull()?.trim().orEmpty()
+        // Daijisho tag form is "[steamappid] <id>"; ES-DE `.steam` is the bare id.
+        val appId = (Regex("(\\d+)\\s*$").find(raw)?.groupValues?.get(1)
+            ?: raw.takeIf { it.toIntOrNull() != null }).orEmpty()
+        if (appId.isEmpty()) return null
+        android.util.Log.d("FrontendLaunch", "GameNative file $filePath -> appid=$appId")
+        return runCatching {
+            containerManager.reloadContainers()
+            containerManager.loadShortcuts().firstOrNull {
+                it.getExtra("steamAppId", "").trim() == appId
+            }
+        }.getOrNull()
     }
 
     /**
