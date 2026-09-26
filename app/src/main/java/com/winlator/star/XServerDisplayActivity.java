@@ -12865,8 +12865,10 @@ public class XServerDisplayActivity extends AppCompatActivity {
             }
         }
         // ---- Drawer opener (checked FIRST, before any swallow/forward rule below) ----
-        // The handheld's physical Back/Return button (kc=4 scan=157) toggles the drawer. Matched on
-        // the scan code so the pad's B, which some ROMs also deliver as KEYCODE_BACK, is excluded.
+        // WinNative parity: the panel is opened by the system Back path (its OnBackPressedCallback),
+        // i.e. the handheld's physical Back/Return button. Its gamepad B is KEYCODE_BUTTON_B and
+        // only ever CLOSES the panel. On this pad B ALSO emits KEYCODE_BACK (scan 305), whereas the
+        // Back/Return button is KEYCODE_BACK scan 157 — so match the scan code and exclude B here.
         if (event.getKeyCode() == KeyEvent.KEYCODE_BACK
                 && event.getAction() == KeyEvent.ACTION_DOWN
                 && event.getScanCode() == BACK_BUTTON_SCAN_CODE
@@ -12878,17 +12880,24 @@ public class XServerDisplayActivity extends AppCompatActivity {
             }
             return true;
         }
+        // Gamepad B is close-only, exactly like WinNative's handleControllerMenuKey BUTTON_B branch.
+        if (event.getKeyCode() == KeyEvent.KEYCODE_BUTTON_B
+                && event.getDevice() != null
+                && ExternalController.isGameController(event.getDevice())
+                && environment != null && inGameControlsEditor == null) {
+            if (event.getAction() == KeyEvent.ACTION_DOWN
+                    && drawerLayout != null && drawerLayout.isDrawerOpen(GravityCompat.START)) {
+                drawerLayout.closeDrawers();
+            }
+            return false; // not consumed when the drawer is closed -> B reaches the game
+        }
         // While the drawer is open, a controller drives the drawer, not the guest. Compose's
         // focus system handles D-pad traversal; A is remapped to DPAD_CENTER so the focused item
-        // activates; B closes the drawer. Nothing here reaches winHandler/xServer.
+        // activates. Nothing here reaches winHandler/xServer.
         if (drawerLayout != null && drawerLayout.isDrawerOpen(GravityCompat.START)
                 && event.getDevice() != null
                 && ExternalController.isGameController(event.getDevice())) {
             int kc = event.getKeyCode();
-            if (kc == KeyEvent.KEYCODE_BUTTON_B) {
-                if (event.getAction() == KeyEvent.ACTION_DOWN) drawerLayout.closeDrawers();
-                return true;
-            }
             if (kc == KeyEvent.KEYCODE_BUTTON_A) {
                 dispatchToDrawer(new KeyEvent(event.getAction(), KeyEvent.KEYCODE_DPAD_CENTER));
                 return true;
