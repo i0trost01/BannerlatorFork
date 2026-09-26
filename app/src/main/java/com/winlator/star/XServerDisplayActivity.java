@@ -12895,17 +12895,9 @@ public class XServerDisplayActivity extends AppCompatActivity {
             dispatchToDrawer(event);
             return true;
         }
-        // A controller BACK that is NOT the physical Back button is the pad's B — forward it to the
-        // game so it never reaches Android's back handling (which would toggle the drawer).
-        if (event.getKeyCode() == KeyEvent.KEYCODE_BACK
-                && event.getDevice() != null
-                && ExternalController.isGameController(event.getDevice())
-                && environment != null && inGameControlsEditor == null) {
-            if (inputControlsView != null && inputControlsView.onKeyEvent(event)) return true;
-            if (winHandler != null && winHandler.onKeyEvent(event)) return true;
-            if (xServer != null && xServer.keyboard != null && xServer.keyboard.onKeyEvent(event)) return true;
-            return true;
-        }
+        // Everything else (including the pad's B, which arrives here as KEYCODE_BACK or
+        // KEYCODE_BUTTON_B) falls through to the normal input path below — B is an ordinary game
+        // button when the drawer is closed. It must NOT be consumed here, or the button dies.
         // Secondary opener for pads with a dedicated Guide/Mode button: HOLD it (~0.5 s).
         if (event.getKeyCode() == KeyEvent.KEYCODE_BUTTON_MODE
                 && environment != null && inGameControlsEditor == null) {
