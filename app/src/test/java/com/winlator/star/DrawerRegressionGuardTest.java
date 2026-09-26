@@ -51,8 +51,9 @@ public class DrawerRegressionGuardTest {
         if (!f.isFile()) f = new File("app/src/main/java/com/winlator/star/ui/DrawerNavBridge.kt");
         String src = new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8);
         for (String member : new String[]{
-                "var level", "var railIndex", "var panelRow by", "var panelCol by",
+                "var level by", "var railIndex", "var panelRow by", "var panelCol by",
                 "var panelRowCount", "var panelColCount", "var railCount", "var activateSignal",
+                "var lastActivatedLevel",
                 "fun resetOnOpen", "fun moveRail", "fun railToPanel", "fun panelToRail",
                 "fun movePanel", "fun activate"}) {
             assertTrue("DrawerNavBridge must expose " + member, src.contains(member));

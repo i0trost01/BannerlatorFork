@@ -26,11 +26,17 @@ object DrawerNavBridge {
     // Bumped to ask the Composable to activate the currently highlighted item.
     var activateSignal by mutableIntStateOf(0)
 
+    // The level that was active when activate() was last called. The Composable's LaunchedEffect
+    // runs after the Activity has already descended rail -> panel, so it cannot read `level` to
+    // decide what A was pressed on; it reads this captured value instead.
+    var lastActivatedLevel by mutableIntStateOf(DrawerNavModel.LEVEL_RAIL)
+
     fun resetOnOpen() {
         level = DrawerNavModel.LEVEL_RAIL
         railIndex = 0
         panelRow = 0
         panelCol = 0
+        lastActivatedLevel = DrawerNavModel.LEVEL_RAIL
     }
 
     fun moveRail(delta: Int) {
@@ -62,6 +68,7 @@ object DrawerNavBridge {
     }
 
     fun activate() {
+        lastActivatedLevel = level
         activateSignal++
     }
 }

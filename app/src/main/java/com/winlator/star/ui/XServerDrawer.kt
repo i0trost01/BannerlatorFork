@@ -163,8 +163,6 @@ fun XServerDrawer() {
     val state = XServerDrawerState
     // Controller navigation: the Activity pushes positions here; this composable renders the
     // highlight and performs the selection. Starts on the rail (level 0), index 0.
-    val navLevel = DrawerNavBridge.level
-    val navRailIndex = DrawerNavBridge.railIndex
     val navActivateRail = DrawerNavBridge.activateSignal
     val selectedTab by state.selectedTab.collectAsState()
     val isPaused by state.isPaused.collectAsState()
@@ -196,7 +194,7 @@ fun XServerDrawer() {
     // A on the rail: select whatever the highlight is on. Mirrors the tap path exactly.
     LaunchedEffect(navActivateRail) {
         if (navActivateRail == 0) return@LaunchedEffect
-        if (DrawerNavBridge.level != DrawerNavModel.LEVEL_RAIL) return@LaunchedEffect
+        if (DrawerNavBridge.lastActivatedLevel != DrawerNavModel.LEVEL_RAIL) return@LaunchedEffect
         val railOrder = listOf(
             TabType.GRAPHICS, TabType.HUD, TabType.RESHADE, TabType.CONTROLS,
             TabType.AUDIO, TabType.ADVANCED,
