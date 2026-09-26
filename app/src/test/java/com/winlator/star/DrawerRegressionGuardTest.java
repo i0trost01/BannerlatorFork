@@ -45,4 +45,17 @@ public class DrawerRegressionGuardTest {
         assertTrue("handleControllerMenuKey must delegate to DrawerController",
                 src.contains("DrawerController.menuAction("));
     }
+
+    @Test public void navBridgeExposesTheAgreedSurface() throws Exception {
+        File f = new File("src/main/java/com/winlator/star/ui/DrawerNavBridge.kt");
+        if (!f.isFile()) f = new File("app/src/main/java/com/winlator/star/ui/DrawerNavBridge.kt");
+        String src = new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8);
+        for (String member : new String[]{
+                "var level", "var railIndex", "var panelRow", "var panelCol",
+                "var panelRowCount", "var panelColCount", "var railCount", "var activateSignal",
+                "fun resetOnOpen", "fun moveRail", "fun railToPanel", "fun panelToRail",
+                "fun movePanel", "fun activate"}) {
+            assertTrue("DrawerNavBridge must expose " + member, src.contains(member));
+        }
+    }
 }
