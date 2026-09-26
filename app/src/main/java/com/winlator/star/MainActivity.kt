@@ -187,6 +187,11 @@ class MainActivity : AppCompatActivity() {
 
         containerManager = ContainerManager(this)
 
+        // Front-end launch (Daijisho/Beacon) may start THIS activity (the app's default) rather than
+        // XServerDisplayActivity — with a GameNative protocol intent or a shortcut_path. Resolve the
+        // requested game and forward to the session activity (WinNative's maybeForwardFrontendLaunch).
+        if (maybeForwardFrontendLaunch()) return
+
         val selectedMenuItemId = intent.getIntExtra("selected_menu_item_id", 0)
         val startRoute = validRouteOrNull(intent.getStringExtra(EXTRA_OPEN_SCREEN))
             ?: menuItemIdToRoute(selectedMenuItemId)
@@ -299,6 +304,48 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    /**
+     * Front-end launch (Daijisho/Beacon): the front end may start THIS activity (the app's default)
+     * rather than XServerDisplayActivity, carrying a GameNative protocol intent or a shortcut_path.
+     * Resolve the requested game and forward to the session activity, then finish — mirroring
+     * WinNative's `maybeForwardFrontendLaunch`/`forwardToGame`. Returns true when it forwarded.
+     */
+    private fun maybeForwardFrontendLaunch(): Boolean {
+        val src = intent ?: return false
+        val action = src.action
+        val gnAction = action == "app.gamenative.LAUNCH_GAME"
+        val gnUri = action == Intent.ACTION_VIEW &&
+                src.data?.scheme?.equals("gamenative", true) == true &&
+                src.data?.host?.equals("run", true) == true
+        var shortcutPath: String? = src.getStringExtra("shortcut_path")
+        var containerId = src.getIntExtra("container_id", 0)
+
+        if (gnAction || gnUri) {
+            val appId = if (gnUri) src.data?.getQueryParameter("appid")?.toIntOrNull() ?: 0
+                        else src.getIntExtra("app_id", 0)
+            if (appId > 0) {
+                val sc = runCatching {
+                    containerManager.reloadContainers()
+                    containerManager.loadShortcuts().firstOrNull {
+                        it.getExtra("steamAppId", "").trim().toIntOrNull() == appId
+                    }
+                }.getOrNull()
+                if (sc != null) {
+                    shortcutPath = sc.file.absolutePath
+                    containerId = sc.container.id
+                }
+            }
+        }
+        if (shortcutPath.isNullOrEmpty()) return false
+        startActivity(Intent(this, XServerDisplayActivity::class.java).apply {
+            putExtra("shortcut_path", shortcutPath)
+            putExtra("container_id", containerId)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        })
+        finish()
+        return true
     }
 
     private fun launchStore(screen: Screen) {
