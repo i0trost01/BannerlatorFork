@@ -36,11 +36,34 @@ public class NoEdgeSwipeDrawerLayoutTest {
         throw new IOException("Could not locate app/ under " + root);
     }
 
+    /**
+     * Assert the override exists AND its body refuses the touch (return false) while the drawer is
+     * closed, then delegates to super while it is open. The signature is matched in its real source
+     * form so that deleting the override, or replacing the body with a bare `return false;` or a
+     * bare `return super....`, fails the guard.
+     */
+    private static void assertBlocksOnlyWhileClosed(String src, String method) {
+        String signature = "public boolean " + method + "(MotionEvent ev)";
+        int sig = src.indexOf(signature);
+        assertTrue("subclass must override " + method, sig >= 0);
+        int bodyEnd = src.indexOf('}', sig);
+        assertTrue("could not delimit the body of " + method, bodyEnd > sig);
+        String body = src.substring(sig, bodyEnd);
+
+        assertTrue(method + " must return false only while the drawer is CLOSED, via "
+                        + "`if (!isDrawerOpen(GravityCompat.START)) return false;`",
+                body.contains("if (!isDrawerOpen(GravityCompat.START)) return false;"));
+        assertTrue(method + " must return false while the drawer is closed",
+                body.contains("return false"));
+        assertTrue(method + " must delegate to super while the drawer is open",
+                body.contains("return super." + method + "(ev);"));
+    }
+
     @Test
-    public void subclassOverridesTouchInterception() throws IOException {
+    public void subclassBlocksEdgeDragOnlyWhileClosed() throws IOException {
         String src = readRepoFile("src", "main", "java", "com", "winlator", "star", "widget", "NoEdgeSwipeDrawerLayout.java");
-        assertTrue("subclass must override onInterceptTouchEvent to block edge drags",
-                src.contains("onInterceptTouchEvent"));
+        assertBlocksOnlyWhileClosed(src, "onInterceptTouchEvent");
+        assertBlocksOnlyWhileClosed(src, "onTouchEvent");
     }
 
     @Test
