@@ -154,16 +154,6 @@ android {
             applicationId "com.winlator.banner.fork"
             resValue "string", "app_name", "Bannerlator Fork"
         }
-        ludashi {
-            dimension "version"
-            applicationId "com.ludashi.benchmark"
-            resValue "string", "app_name", "Bannerlator Bionic Ludashi"
-        }
-        pubg {
-            dimension "version"
-            applicationId "com.tencent.ig"
-            resValue "string", "app_name", "Bannerlator Bionic PuBG"
-        }
     }
 
     ndkVersion '29.0.14206865'

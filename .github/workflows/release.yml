@@ -126,10 +126,8 @@ jobs:
           --arg vn "$VERSION" \
           --arg notes "$NOTES" \
           --arg std "Bannerlator-${N}-standard.apk" \
-          --arg lud "Bannerlator-${N}-ludashi.apk" \
-          --arg pbg "Bannerlator-${N}-pubg.apk" \
           '{versionCode:$vc, versionName:$vn, notes:$notes, minSupported:1,
-            apk:{"com.winlator.banner":$std,"com.ludashi.benchmark":$lud,"com.tencent.ig":$pbg}}' \
+            apk:{"com.winlator.banner.fork":$std}}' \
           > update.json
         echo "Generated update.json:"; cat update.json
 
@@ -144,8 +142,6 @@ jobs:
         body_path: notes/release-body.md
         files: |
           dist/Bannerlator-${{ inputs.release_number }}-standard.apk
-          dist/Bannerlator-${{ inputs.release_number }}-ludashi.apk
-          dist/Bannerlator-${{ inputs.release_number }}-pubg.apk
           update.json
         prerelease: ${{ inputs.make_prerelease == 'true' }}
         # Only a stable cut becomes "latest"; pre-releases never do, so the

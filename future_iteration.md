@@ -2,7 +2,11 @@
 
 Ideas/cleanups for the fork that are deliberately deferred. Not commitments.
 
-## Remove the unused product flavors — keep only `standard`
+> **DONE:** the `ludashi`/`pubg` product flavors were removed and `_build.yml` now
+> builds `standard` only (CI cuts one APK); `release.yml`'s `update.json`/assets were
+> trimmed to match. Completed in commit "chore: drop ludashi/pubg flavors; build standard only".
+
+## ~~Remove the unused product flavors — keep only `standard`~~ (DONE)
 
 **Context:** this personal fork only needs the `standard` flavor (`com.winlator.banner.fork`).
 The `ludashi` (`com.ludashi.benchmark`) and `pubg` (`com.tencent.ig`) flavors exist for upstream's
