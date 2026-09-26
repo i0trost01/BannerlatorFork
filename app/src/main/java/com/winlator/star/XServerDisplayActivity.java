@@ -1955,7 +1955,7 @@ public class XServerDisplayActivity extends AppCompatActivity {
         });
         
         drawerLayout.setOnApplyWindowInsetsListener((view, windowInsets) -> windowInsets.replaceSystemWindowInsets(0, 0, 0, 0));
-        // Must stay unlocked: LOCK_MODE_LOCKED_CLOSED makes openDrawer() a no-op, which silently
+        // Must stay unlocked: the locked-closed drawer mode makes openDrawer() a no-op, which silently
         // killed every programmatic open (Back via handleNavigationBackPressed, the shortcut, and
         // the Graphics Engine drawer entry). WinNative never locks the drawer.
         drawerLayout.setDrawerLockMode(DrawerLayout.LOCK_MODE_UNLOCKED);
