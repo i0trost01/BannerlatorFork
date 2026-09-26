@@ -7141,6 +7141,41 @@ public class XServerDisplayActivity extends AppCompatActivity {
     }
 
     @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        if (intent == null) return;
+        setIntent(intent);
+
+        // A frontend (Daijisho/Beacon) can launch a DIFFERENT game while a session is already
+        // running. The activity is singleTask, so that arrives here (not in onCreate) — without
+        // this the app is merely foregrounded and no game starts. Ported from WinNative's
+        // onNewIntent/switchLaunchTargetAfterCleanup: resolve the target and recreate so onCreate
+        // runs with the new intent (onDestroy tears the old session down first).
+        String incomingPath = intent.getStringExtra("shortcut_path");
+        int incomingContainer = intent.getIntExtra("container_id", 0);
+        if (isGameNativeLaunchIntent(intent)) {
+            Shortcut gnShortcut = resolveGameNativeLaunch(intent);
+            if (gnShortcut == null) {
+                Log.w("XServerDisplayActivity", "onNewIntent: GameNative launch had no matching shortcut");
+                return;
+            }
+            incomingPath = gnShortcut.file.getAbsolutePath();
+            incomingContainer = gnShortcut.container.id;
+        }
+        if (incomingPath == null || incomingPath.isEmpty()) return;
+
+        String currentPath = (shortcut != null && shortcut.file != null) ? shortcut.file.getAbsolutePath() : "";
+        boolean changed = !incomingPath.equals(currentPath)
+                || (incomingContainer != 0 && container != null && incomingContainer != container.id);
+        if (!changed) {
+            Log.d("XServerDisplayActivity", "onNewIntent: same launch target, ignoring");
+            return;
+        }
+        Log.d("XServerDisplayActivity", "onNewIntent: switching launch target to " + incomingPath);
+        recreate();
+    }
+
+    @Override
     public void onBackPressed() {
         if (inGameControlsEditor != null) {
             if (inGameControlsEditor.handleBack()) return;
