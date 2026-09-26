@@ -12778,6 +12778,17 @@ public class XServerDisplayActivity extends AppCompatActivity {
             super.dispatchKeyEvent(event);
             return true;
         }
+        // DIAGNOSTIC (temporary): identify which physical button sends which key/scan code.
+        // Press B once and the Return/Back button once; read `adb logcat -s WinInput`.
+        if (event.getDevice() != null && ExternalController.isGameController(event.getDevice())) {
+            android.util.Log.i("WinInput", "kc=" + event.getKeyCode()
+                    + " (" + KeyEvent.keyCodeToString(event.getKeyCode()) + ")"
+                    + " scan=" + event.getScanCode()
+                    + " act=" + event.getAction()
+                    + " src=0x" + Integer.toHexString(event.getSource())
+                    + " dev=" + event.getDevice().getName()
+                    + " desc=" + event.getDevice().getDescriptor());
+        }
         // Gamepad BACK (the pad's Back/Return button; B maps to the same key on this ROM): a HOLD
         // opens the in-game drawer, a quick TAP is forwarded to the game so B stays usable in-game.
         // While the drawer is open a tap closes it. Handled before the guest fallbacks so it never
