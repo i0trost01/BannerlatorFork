@@ -62,4 +62,51 @@ public class DrawerNavModelTest {
     @Test public void backFromTheRailStaysOnTheRail() {
         assertEquals(DrawerNavModel.LEVEL_RAIL, DrawerNavModel.levelAfterBack(DrawerNavModel.LEVEL_RAIL));
     }
+
+    @Test public void upOnTheFirstRowLeavesThePanel() {
+        assertEquals(DrawerNavModel.PanelMove.UP_FROM_FIRST_ROW,
+                DrawerNavModel.panelMove(DPAD_UP, 0, 3, 0, 2));
+    }
+
+    @Test public void upInsideTheGridMovesUp() {
+        assertEquals(DrawerNavModel.PanelMove.UP,
+                DrawerNavModel.panelMove(DPAD_UP, 2, 3, 1, 2));
+    }
+
+    @Test public void downAtTheLastRowIsNone() {
+        assertEquals(DrawerNavModel.PanelMove.NONE,
+                DrawerNavModel.panelMove(DPAD_DOWN, 2, 3, 0, 2));
+    }
+
+    @Test public void downInsideTheGridMovesDown() {
+        assertEquals(DrawerNavModel.PanelMove.DOWN,
+                DrawerNavModel.panelMove(DPAD_DOWN, 0, 3, 0, 2));
+    }
+
+    @Test public void leftAtTheFirstColumnIsNone() {
+        assertEquals(DrawerNavModel.PanelMove.NONE,
+                DrawerNavModel.panelMove(DPAD_LEFT, 0, 3, 0, 2));
+    }
+
+    @Test public void leftInsideARowMovesLeft() {
+        assertEquals(DrawerNavModel.PanelMove.LEFT,
+                DrawerNavModel.panelMove(DPAD_LEFT, 0, 3, 1, 2));
+    }
+
+    @Test public void rightAtTheLastColumnIsNone() {
+        assertEquals(DrawerNavModel.PanelMove.NONE,
+                DrawerNavModel.panelMove(DPAD_RIGHT, 0, 3, 1, 2));
+    }
+
+    @Test public void rightInsideARowMovesRight() {
+        assertEquals(DrawerNavModel.PanelMove.RIGHT,
+                DrawerNavModel.panelMove(DPAD_RIGHT, 0, 3, 0, 2));
+    }
+
+    @Test public void emptyPanelSwallowsDirectionalKeys() {
+        assertEquals(DrawerNavModel.PanelMove.NONE,
+                DrawerNavModel.panelMove(DPAD_DOWN, 0, 0, 0, 0));
+        assertEquals(DrawerNavModel.PanelMove.NONE,
+                DrawerNavModel.panelMove(DPAD_UP, 0, 0, 0, 0));
+    }
 }

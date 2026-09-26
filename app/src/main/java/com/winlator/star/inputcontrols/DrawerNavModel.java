@@ -54,4 +54,27 @@ public final class DrawerNavModel {
     public static int levelAfterBack(int level) {
         return LEVEL_RAIL;
     }
+
+    /** What a D-pad press should do to the panel highlight. */
+    public enum PanelMove { UP_FROM_FIRST_ROW, UP, DOWN, LEFT, RIGHT, NONE }
+
+    public static PanelMove panelMove(int keyCode, int row, int rowCount, int col, int colCount) {
+        if (rowCount <= 0) return PanelMove.NONE;
+        if (keyCode == KEYCODE_DPAD_UP) {
+            if (row <= 0) return PanelMove.UP_FROM_FIRST_ROW;
+            return PanelMove.UP;
+        }
+        if (keyCode == KEYCODE_DPAD_DOWN) {
+            return row >= rowCount - 1 ? PanelMove.NONE : PanelMove.DOWN;
+        }
+        if (keyCode == KEYCODE_DPAD_LEFT) {
+            if (colCount <= 1) return PanelMove.NONE;
+            return col <= 0 ? PanelMove.NONE : PanelMove.LEFT;
+        }
+        if (keyCode == KEYCODE_DPAD_RIGHT) {
+            if (colCount <= 1) return PanelMove.NONE;
+            return col >= colCount - 1 ? PanelMove.NONE : PanelMove.RIGHT;
+        }
+        return PanelMove.NONE;
+    }
 }
