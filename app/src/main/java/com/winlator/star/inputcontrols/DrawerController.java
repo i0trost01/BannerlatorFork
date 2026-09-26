@@ -5,7 +5,8 @@ package com.winlator.star.inputcontrols;
  * drawer follows is a static function of plain booleans and key codes, so it runs (and is tested)
  * on the JVM. XServerDisplayActivity is a thin adapter that performs the side effects these
  * decisions describe. Back opens/closes the drawer; B is an ordinary game button while the drawer
- * is closed and only ever closes it while open; B never opens it.
+ * is closed and only ever closes it while open; B never opens it. While the drawer is open at panel
+ * level, {@code menuActionAtLevel} instead has B step the highlight from the panel back up to the rail.
  */
 public final class DrawerController {
     public static final int KEYCODE_BUTTON_B = 97;

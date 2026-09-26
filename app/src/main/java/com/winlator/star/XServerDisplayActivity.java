@@ -105,6 +105,8 @@ import com.winlator.star.core.WineThemeManager;
 import com.winlator.star.core.WineUtils;
 import com.winlator.star.inputcontrols.ControlsProfile;
 import com.winlator.star.inputcontrols.DrawerController;
+import com.winlator.star.inputcontrols.DrawerNavModel;
+import com.winlator.star.ui.DrawerNavBridge;
 import com.winlator.star.inputcontrols.ExternalController;
 import com.winlator.star.inputcontrols.InputControlsManager;
 import com.winlator.star.inputcontrols.SteamControllerBackend;
@@ -1932,6 +1934,7 @@ public class XServerDisplayActivity extends AppCompatActivity {
                 // Hide the on-handheld "playing on external display" badge while the menu is open so
                 // it doesn't overlap the drawer content.
                 XServerDialogState.INSTANCE.setMenuOpen(true);
+                DrawerNavBridge.INSTANCE.resetOnOpen();
                 resetDrawerStickNavigation();
                 // Menu owns the controller while open — flush a neutral state
                 // once so a held stick / pressed button / latched trigger from
@@ -12939,27 +12942,37 @@ public class XServerDisplayActivity extends AppCompatActivity {
      */
     private boolean handleControllerMenuKey(int kc, boolean down) {
         if (drawerLayout == null || environment == null) return false;
-        DrawerController.DrawerMenuAction action = DrawerController.menuAction(
-                kc, down, drawerLayout.isDrawerOpen(GravityCompat.START), inGameControlsEditor != null);
+        boolean drawerOpen = drawerLayout.isDrawerOpen(GravityCompat.START);
+        int level = DrawerNavBridge.INSTANCE.getLevel();
+        DrawerController.DrawerMenuAction action = DrawerController.menuActionAtLevel(
+                kc, down, drawerOpen, inGameControlsEditor != null, level);
         if (action == DrawerController.DrawerMenuAction.PASS_THROUGH) return false;
         if (action == DrawerController.DrawerMenuAction.CLOSE_DRAWER) {
             drawerLayout.closeDrawers();
             return true;
         }
-        if (down) {
-            if (kc == KeyEvent.KEYCODE_BUTTON_A) {
-                dispatchToDrawer(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_CENTER));
-                dispatchToDrawer(new KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_CENTER));
-            } else if (kc == KeyEvent.KEYCODE_DPAD_LEFT || kc == KeyEvent.KEYCODE_DPAD_RIGHT
-                    || kc == KeyEvent.KEYCODE_DPAD_UP || kc == KeyEvent.KEYCODE_DPAD_DOWN) {
-                dispatchToDrawer(new KeyEvent(KeyEvent.ACTION_DOWN, kc));
-                dispatchToDrawer(new KeyEvent(KeyEvent.ACTION_UP, kc));
-            } else {
-                dispatchToDrawer(new KeyEvent(KeyEvent.ACTION_DOWN, kc));
-            }
-        } else {
-            dispatchToDrawer(new KeyEvent(KeyEvent.ACTION_UP, kc));
+        if (action == DrawerController.DrawerMenuAction.PANEL_TO_RAIL) {
+            DrawerNavBridge.INSTANCE.panelToRail();
+            return true;
         }
+        if (!down) return true;
+
+        if (kc == KeyEvent.KEYCODE_BUTTON_A || kc == KeyEvent.KEYCODE_DPAD_CENTER) {
+            DrawerNavBridge.INSTANCE.activate();
+            if (level == DrawerNavModel.LEVEL_RAIL) {
+                DrawerNavBridge.INSTANCE.railToPanel();
+            }
+            return true;
+        }
+
+        if (level == DrawerNavModel.LEVEL_RAIL) {
+            DrawerNavBridge.INSTANCE.moveRail(DrawerNavModel.railIndexDelta(kc));
+            return true;
+        }
+
+        DrawerNavBridge.INSTANCE.movePanel(DrawerNavModel.panelMove(
+                kc, DrawerNavBridge.INSTANCE.getPanelRow(), DrawerNavBridge.INSTANCE.getPanelRowCount(),
+                DrawerNavBridge.INSTANCE.getPanelCol(), DrawerNavBridge.INSTANCE.getPanelColCount()));
         return true;
     }
 

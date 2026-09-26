@@ -43,7 +43,7 @@ public class DrawerRegressionGuardTest {
         assertTrue("handleNavigationBackPressed must delegate to DrawerController",
                 src.contains("DrawerController.backAction("));
         assertTrue("handleControllerMenuKey must delegate to DrawerController",
-                src.contains("DrawerController.menuAction("));
+                src.contains("DrawerController.menuActionAtLevel("));
     }
 
     @Test public void navBridgeExposesTheAgreedSurface() throws Exception {
@@ -57,5 +57,22 @@ public class DrawerRegressionGuardTest {
                 "fun movePanel", "fun activate"}) {
             assertTrue("DrawerNavBridge must expose " + member, src.contains(member));
         }
+    }
+
+    @Test public void activityDrivesTheNavBridge() throws Exception {
+        String src = activitySource();
+        assertTrue("the Activity must drive the drawer nav bridge",
+                src.contains("DrawerNavBridge.INSTANCE"));
+        assertTrue("the Activity must use the level-aware menu action",
+                src.contains("menuActionAtLevel("));
+        assertTrue("the bridge must be reset when the drawer opens", src.contains("resetOnOpen()"));
+    }
+
+    @Test public void backStillOpensThroughTheExistingPath() throws Exception {
+        String src = activitySource();
+        assertTrue("Back-to-open must keep going through backAction (P1)",
+                src.contains("DrawerController.backAction("));
+        assertFalse("KEYCODE_BACK must NOT be redirected into the controller menu handler",
+                src.contains("handleControllerMenuKey(KeyEvent.KEYCODE_BACK"));
     }
 }
