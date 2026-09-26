@@ -6520,8 +6520,9 @@ public class XServerDisplayActivity extends AppCompatActivity {
     /**
      * On game exit, push a genuine Steam-library game's saves UP to Steam Cloud (local → cloud) — the
      * Steam-parity mirror of {@link #autoUploadGogSavesBlocking()}. Additive to the unconditional local
-     * Collect above: this ONLY runs when the Save Manager toggle {@code auto_upload_steam_on_exit} is on
-     * AND the user has accepted the third-party cloud disclaimer (checked by the caller).
+     * Collect above: this runs when the Save Manager toggle {@code auto_upload_steam_on_exit} is on
+     * (the sole gate - the toggle itself is the user's consent; the steam_prefs cloud disclaimer flag
+     * gates only the game-detail-page cloud actions, not this exit path).
      *
      * Best-effort + fully guarded (logs to "BH_SAVE_SYNC"). The blocking cloud sync runs on its own
      * worker thread and we bound-wait on a latch so a stalled network can never freeze game-exit, while
