@@ -126,6 +126,19 @@ am start -n com.ludashi.benchmark/com.winlator.star.XServerDisplayActivity -e sh
 am start -n com.tencent.ig/com.winlator.star.XServerDisplayActivity -e shortcut_path {file_path}
 ```
 
+For **Bannerlator Fork** — whose applicationId is `com.winlator.banner.fork` — you can skip the path
+extra and hand the `.desktop` to `MainActivity` as the intent **data** instead. `{file_uri}` is Beacon's
+URI token (a `content://` or `file://` URI to the selected `.desktop`), and `MainActivity` resolves it
+and forwards the launch to the game:
+
+**Bannerlator Fork (`com.winlator.banner.fork`):**
+
+```
+am start -n com.winlator.banner.fork/com.winlator.star.MainActivity -a android.intent.action.VIEW -d {file_uri}
+```
+
+The `-e shortcut_path {file_path}` form above still works — use whichever your front end provides.
+
 > `-e` passes a **string** extra (`--es` works too). Use the `{file_path}` token — **not** `{file.path}`
 > (dot), which Beacon doesn't recognise and would pass literally, and **not** `{file_content}`, which
 > passes the file's *contents* instead of its path. If Beacon ever foregrounds an already-open session

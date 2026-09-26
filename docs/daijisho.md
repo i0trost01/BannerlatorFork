@@ -46,3 +46,17 @@ directly by absolute path with a custom player:
 
 `shortcut_path` expects the exported `.desktop` **absolute path** (Daijisho's `{file.path}` token),
 not a `content://` URI. This route works for every game regardless of app id.
+
+## Launching via the exported `.desktop` URI (WinNative-compatible)
+
+The fork also accepts the exported `.desktop` itself as the intent **data**, which is how the
+WinNative fork is configured. Point the player at `MainActivity` and pass Daijisho's `{file.uri}`
+token:
+
+```
+-n com.winlator.banner.fork/com.winlator.star.MainActivity -a android.intent.action.VIEW -d {file.uri}
+```
+
+`{file.uri}` is a `content://` or `file://` URI to the exported `.desktop`; `MainActivity` resolves it,
+verifies it looks like a shortcut, and forwards the launch to the game activity. This launches the game
+directly and does not require an app id.
