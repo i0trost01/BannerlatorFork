@@ -12936,9 +12936,11 @@ public class XServerDisplayActivity extends AppCompatActivity {
     /**
      * WinNative's handleControllerMenuKey: while the drawer is CLOSED this returns false for every
      * controller button, so B (KEYCODE_BUTTON_B) and the rest fall straight through to the game.
-     * While the drawer is OPEN it owns the pad: B closes the drawer, A activates the focused item,
-     * and D-pad directions drive Compose focus. Back-to-open is NOT handled here — it arrives via the
-     * OnBackPressedDispatcher (see the addCallback in setupUI). Returns true when it consumed the event.
+     * While OPEN it owns the pad through DrawerController.menuActionAtLevel and DrawerNavBridge:
+     * D-pad moves the highlight, A activates (and, from the rail, descends into the panel), and B
+     * steps back one level — panel to rail, then rail to closing the drawer. Closing happens on
+     * CLOSE_DRAWER. Back-to-open is NOT handled here — it arrives via the OnBackPressedDispatcher
+     * (see the addCallback in setupUI). Returns true when it consumed the event.
      */
     private boolean handleControllerMenuKey(int kc, boolean down) {
         if (drawerLayout == null || environment == null) return false;
