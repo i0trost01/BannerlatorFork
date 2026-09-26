@@ -12826,8 +12826,17 @@ public class XServerDisplayActivity extends AppCompatActivity {
                     && (dkc == KeyEvent.KEYCODE_BACK || dkc == KeyEvent.KEYCODE_BUTTON_MODE
                         || dkc == KeyEvent.KEYCODE_HOME || dkc == KeyEvent.KEYCODE_BUTTON_SELECT
                         || dkc == KeyEvent.KEYCODE_BUTTON_B)) {
-                android.widget.Toast.makeText(this,
-                        "kc=" + dkc + " scan=" + event.getScanCode(), android.widget.Toast.LENGTH_SHORT).show();
+                // Custom, high-contrast toast — the default one renders dark-on-dark over the game.
+                android.widget.TextView tv = new android.widget.TextView(this);
+                tv.setText("kc=" + dkc + "  scan=" + event.getScanCode() + "  " + KeyEvent.keyCodeToString(dkc));
+                tv.setTextColor(android.graphics.Color.WHITE);
+                tv.setTextSize(20f);
+                tv.setPadding(40, 30, 40, 30);
+                tv.setBackgroundColor(android.graphics.Color.argb(235, 0, 0, 0));
+                android.widget.Toast t = new android.widget.Toast(this);
+                t.setView(tv);
+                t.setDuration(android.widget.Toast.LENGTH_LONG);
+                t.show();
             }
         }
         // In-game drawer opener — WinNative parity. WinNative opens its panel from the system Back
