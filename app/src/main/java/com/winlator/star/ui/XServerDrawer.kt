@@ -682,6 +682,34 @@ private fun Modifier.railControllerHighlight(index: Int, accent: Color): Modifie
     )
 }
 
+/**
+ * Marks a panel control as a controller-navigable cell at (row, col) and draws the highlight ring
+ * when the Activity's controller navigation is sitting on it. Rows/columns are reported to
+ * DrawerNavBridge so the Activity can clamp D-pad movement without knowing this tab's layout.
+ */
+@Composable
+private fun Modifier.drawerNavCell(
+    row: Int,
+    col: Int,
+    colCount: Int,
+    accent: Color,
+    onActivate: () -> Unit = {},
+): Modifier {
+    val highlighted = DrawerNavBridge.level == DrawerNavModel.LEVEL_PANEL &&
+        DrawerNavBridge.panelRow == row && DrawerNavBridge.panelCol == col
+    val signal = DrawerNavBridge.activateSignal
+    LaunchedEffect(row, colCount) {
+        if (row + 1 > DrawerNavBridge.panelRowCount) DrawerNavBridge.panelRowCount = row + 1
+        if (colCount > DrawerNavBridge.panelColCount) DrawerNavBridge.panelColCount = colCount
+    }
+    LaunchedEffect(signal) {
+        if (signal != 0 && highlighted) onActivate()
+    }
+    return this.then(
+        if (highlighted) Modifier.border(2.dp, accent, RoundedCornerShape(10.dp)) else Modifier
+    )
+}
+
 @Composable
 private fun TabIconButton(iconRes: Int, isSelected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val accent = MaterialTheme.colorScheme.primary
@@ -3735,17 +3763,19 @@ private fun ControlsContent(state: XServerDrawerState) {
     // exactly one renders at a time. ModeChipGrid is already the drawer's segmented-control language
     // (equal-width accent-filled chips), so the bar reads as native here instead of a new widget.
     val subTab by state.controlsSubTab.collectAsState()
-    ModeChipGrid(
-        listOf(
-            Triple("Touch", subTab == 0) { state.setControlsSubTab(0) },
-            Triple("Mouse", subTab == 1) { state.setControlsSubTab(1) },
-            Triple("Vibration", subTab == 2) { state.setControlsSubTab(2) },
-            Triple("Gyro", subTab == 3) { state.setControlsSubTab(3) },
-            Triple("Players", subTab == 4) { state.setControlsSubTab(4) },
-            Triple(stringResource(R.string.swipe_tab), subTab == 5) { state.setControlsSubTab(5) },
-        ),
-        perRow = 3
-    )
+    Box(modifier = Modifier.drawerNavCell(row = 0, col = 0, colCount = 1, accent = accent)) {
+        ModeChipGrid(
+            listOf(
+                Triple("Touch", subTab == 0) { state.setControlsSubTab(0) },
+                Triple("Mouse", subTab == 1) { state.setControlsSubTab(1) },
+                Triple("Vibration", subTab == 2) { state.setControlsSubTab(2) },
+                Triple("Gyro", subTab == 3) { state.setControlsSubTab(3) },
+                Triple("Players", subTab == 4) { state.setControlsSubTab(4) },
+                Triple(stringResource(R.string.swipe_tab), subTab == 5) { state.setControlsSubTab(5) },
+            ),
+            perRow = 3
+        )
+    }
     Spacer(Modifier.height(8.dp))
 
     // Input Controls section — hoisted above the sub-tab switch so the in-flight profile/flag edits
@@ -3769,7 +3799,8 @@ private fun ControlsContent(state: XServerDrawerState) {
                     onValueChange = {}, readOnly = true,
                     label = { Text("Profile", color = MaterialTheme.colorScheme.onSurfaceVariant) },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = dropdownExpanded) },
-                    modifier = Modifier.fillMaxWidth().menuAnchor(),
+                    modifier = Modifier.fillMaxWidth().menuAnchor()
+                        .drawerNavCell(row = 1, col = 0, colCount = 1, accent = accent) { dropdownExpanded = true },
                     singleLine = true,
                 )
                 ExposedDropdownMenu(expanded = dropdownExpanded, onDismissRequest = { dropdownExpanded = false }) {
@@ -3912,15 +3943,20 @@ private fun ControlsContent(state: XServerDrawerState) {
             // rumble target, intensity, and per-slot rows below, which are moot while it's off). Persists
             // globally.
             val vibrationMasterOn by XServerDialogState.vibrationMasterEnabled.collectAsState()
-            ToggleChipGrid(
-                listOf(
-                    ToggleChipItem("Enabled", vibrationMasterOn) {
-                        XServerDialogState.setVibrationMasterEnabled(it)
-                        XServerDialogState.onVibrationMasterChanged?.invoke(it)
-                    }
-                ),
-                perRow = 3
-            )
+            Box(modifier = Modifier.drawerNavCell(row = 1, col = 0, colCount = 1, accent = accent, onActivate = {
+                XServerDialogState.setVibrationMasterEnabled(!vibrationMasterOn)
+                XServerDialogState.onVibrationMasterChanged?.invoke(!vibrationMasterOn)
+            })) {
+                ToggleChipGrid(
+                    listOf(
+                        ToggleChipItem("Enabled", vibrationMasterOn) {
+                            XServerDialogState.setVibrationMasterEnabled(it)
+                            XServerDialogState.onVibrationMasterChanged?.invoke(it)
+                        }
+                    ),
+                    perRow = 3
+                )
+            }
             if (vibrationMasterOn) {
                 // Per-container rumble target + intensity (PC-accurate dual-motor rumble). Keyed on the
                 // incoming config so re-opening the drawer doesn't drift from a stale capture — same pattern

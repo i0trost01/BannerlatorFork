@@ -23,6 +23,12 @@ public class DrawerRegressionGuardTest {
         return new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8);
     }
 
+    private String drawerSource() throws Exception {
+        File f = new File("src/main/java/com/winlator/star/ui/XServerDrawer.kt");
+        if (!f.isFile()) f = new File("app/src/main/java/com/winlator/star/ui/XServerDrawer.kt");
+        return new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8);
+    }
+
     @Test public void drawerMustNeverBeLockedClosed() throws Exception {
         String src = activitySource();
         assertTrue("the drawer lock line must be present", src.contains("setDrawerLockMode("));
@@ -84,5 +90,13 @@ public class DrawerRegressionGuardTest {
         assertTrue("the drawer must read the nav bridge", src.contains("DrawerNavBridge"));
         assertTrue("the drawer must report its rail count", src.contains("railCount"));
         assertTrue("the drawer must react to the activation signal", src.contains("activateSignal"));
+    }
+
+    @Test public void drawerExposesPanelNavigationHelper() throws Exception {
+        String src = drawerSource();
+        assertTrue("the drawer must expose a panel cell helper",
+                src.contains("fun Modifier.drawerNavCell"));
+        assertTrue("the panel must report its row count", src.contains("panelRowCount"));
+        assertTrue("the panel must report its column count", src.contains("panelColCount"));
     }
 }
