@@ -6,6 +6,7 @@ import com.winlator.star.container.Container
 import com.winlator.star.container.ContainerManager
 import com.winlator.star.container.Shortcut
 import com.winlator.star.core.SaveLocator
+import com.winlator.star.core.WinePath
 import `in`.dragonbra.javasteam.types.KeyValue
 import java.io.File
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -794,8 +795,27 @@ object SteamCloudSaveManager {
             instAbs.substring(imageFsRoot.length).trimStart('/') else instAbs.trimStart('/')
         val keys = listOf("/${instRel.lowercase()}/", "/${instAbs.trimStart('/').lowercase()}/")
 
+        // The game's real Android install dir, for the drive-map match below.
+        val instAbsFile = File(installDir).absolutePath.replace('\\', '/').trimEnd('/')
+
         for (sc in shortcuts) {
             val raw = sc.path ?: continue
+
+            // PRIMARY (drive-agnostic): resolve the shortcut's exec back through ITS container's drive
+            // map to a real Android path, then check it lives under the install dir. Mirrors
+            // SteamCloudSavePaths.resolveContainer so an off-imagefs game — the "Install to SD card"
+            // option parks it on the card as F:\... — resolves here too. Without this, upload (Collect)
+            // matched only via the string fallback below, which strips the drive letter and so never
+            // matched the absolute SD install path (download already used the full resolver, which is
+            // why a game could download but not upload). resolveAndroidPath returns null for a Z:\
+            // imagefs game, so internal games fall through to the string match unchanged.
+            val android = runCatching { WinePath.resolveAndroidPath(sc.container, raw) }.getOrNull()
+            if (android != null) {
+                val ap = android.absolutePath.replace('\\', '/').trimEnd('/')
+                if (ap.equals(instAbsFile, ignoreCase = true) ||
+                    ap.startsWith("$instAbsFile/", ignoreCase = true)) return sc
+            }
+
             var exec = raw.replace('\\', '/').lowercase().trim()
             exec = exec.replaceFirst(Regex("^[a-z]:"), "")
             if (!exec.startsWith("/")) exec = "/$exec"
