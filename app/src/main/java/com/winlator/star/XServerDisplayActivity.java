@@ -1986,6 +1986,14 @@ public class XServerDisplayActivity extends AppCompatActivity {
         drawerLayout.setOnApplyWindowInsetsListener((view, windowInsets) -> windowInsets.replaceSystemWindowInsets(0, 0, 0, 0));
         drawerLayout.setDrawerLockMode(DrawerLayout.LOCK_MODE_LOCKED_CLOSED);
 
+        // WinNative parity: register Back on the OnBackPressedDispatcher so a controller BACK (which
+        // arrives via the dispatcher rather than onBackPressed()) toggles the drawer.
+        getOnBackPressedDispatcher().addCallback(this, new androidx.activity.OnBackPressedCallback(true) {
+            @Override public void handleOnBackPressed() {
+                if (!handleNavigationBackPressed()) setEnabled(false);
+            }
+        });
+
         // Wire Compose in-game drawer
         boolean enableLogs = preferences.getBoolean("enable_wine_debug", false) || preferences.getBoolean("enable_box64_logs", false);
         boolean allowMagnifier = !XrActivity.isEnabled(this);
@@ -7200,17 +7208,30 @@ public class XServerDisplayActivity extends AppCompatActivity {
 
     @Override
     public void onBackPressed() {
+        if (handleNavigationBackPressed()) return;
+        super.onBackPressed();
+    }
+
+    /**
+     * WinNative's handleNavigationBackPressed: Back toggles the in-game drawer. Registered on the
+     * OnBackPressedDispatcher (see setupUI) so a controller-originated BACK — which arrives via the
+     * dispatcher, not onBackPressed() — opens the drawer too. Returns true when it handled the press.
+     */
+    private boolean handleNavigationBackPressed() {
         if (inGameControlsEditor != null) {
-            if (inGameControlsEditor.handleBack()) return;
+            if (inGameControlsEditor.handleBack()) return true;
             closeInGameControlsEditor();
-            return;
+            return true;
         }
         if (environment != null) {
             if (!drawerLayout.isDrawerOpen(GravityCompat.START)) {
                 drawerLayout.openDrawer(GravityCompat.START);
+            } else {
+                drawerLayout.closeDrawers();
             }
-            else drawerLayout.closeDrawers();
+            return true;
         }
+        return false;
     }
 
     private void openXServerDrawer() {
