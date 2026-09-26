@@ -9,8 +9,10 @@ name: Fork Release (signed standard APK for Obtainium)
 #   app/build.gradle's committed versionCode is 89, and github.run_number starts at 1
 #   for a new repository. A run_number stamp (1, 2, 3 …) would therefore make every
 #   fork build numerically OLDER than the base app, and Obtainium/Android would refuse
-#   to install it over an existing one. `date -u +%y%m%d%H%M` (e.g. 2609251412) is a large
-#   integer that only ever moves forward. This is a controller RULING.
+#   to install it over an existing one. Minutes since the epoch (e.g. 29833333) is a large
+#   integer that only ever moves forward AND stays under the 32-bit ceiling (a 10-digit
+#   YYMMDDHHMM like 2609260130 overflows Integer.MAX_VALUE and crashes the Gradle config).
+#   This is a controller RULING.
 
 on:
   workflow_dispatch:
@@ -30,10 +32,10 @@ jobs:
     outputs:
       version_code: ${{ steps.stamp.outputs.version_code }}
     steps:
-    - name: Compute increasing versionCode (UTC YYMMDDHHMM)
+    - name: Compute increasing versionCode (minutes since epoch)
       id: stamp
       run: |
-        VC=$(date -u +%y%m%d%H%M)
+        VC=$(( $(date -u +%s) / 60 ))
         echo "version_code=$VC" >> "$GITHUB_OUTPUT"
         echo "fork versionCode = $VC (committed base is 89)"
 
