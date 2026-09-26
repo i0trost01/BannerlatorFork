@@ -12828,23 +12828,6 @@ public class XServerDisplayActivity extends AppCompatActivity {
                 && handleControllerMenuKey(event.getKeyCode(), event.getAction() == KeyEvent.ACTION_DOWN)) {
             return true;
         }
-        // While the drawer is open, a controller drives the drawer, not the guest. Compose's
-        // focus system handles D-pad traversal; A is remapped to DPAD_CENTER so the focused item
-        // activates. Nothing here reaches winHandler/xServer.
-        if (drawerLayout != null && drawerLayout.isDrawerOpen(GravityCompat.START)
-                && event.getDevice() != null
-                && ExternalController.isGameController(event.getDevice())) {
-            int kc = event.getKeyCode();
-            if (kc == KeyEvent.KEYCODE_BUTTON_A) {
-                dispatchToDrawer(new KeyEvent(event.getAction(), KeyEvent.KEYCODE_DPAD_CENTER));
-                return true;
-            }
-            dispatchToDrawer(event);
-            return true;
-        }
-        // Everything else (including the pad's B, which arrives here as KEYCODE_BACK or
-        // KEYCODE_BUTTON_B) falls through to the normal input path below — B is an ordinary game
-        // button when the drawer is closed. It must NOT be consumed here, or the button dies.
         if (event.getAction() == KeyEvent.ACTION_DOWN
                 && (event.getKeyCode() == KeyEvent.KEYCODE_HOME
                     || event.getKeyCode() == KeyEvent.KEYCODE_BUTTON_SELECT)
