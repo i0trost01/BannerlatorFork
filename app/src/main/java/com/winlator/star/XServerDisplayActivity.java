@@ -5524,7 +5524,7 @@ public class XServerDisplayActivity extends AppCompatActivity {
                             // Additionally push to Steam Cloud (opt-in). The Save Manager toggle
                             // "Steam games: auto-upload to cloud on exit" (save_manager_prefs) IS the user's
                             // consent: enabling it on that screen is an explicit opt-in, so the exit path must
-                            // honor it directly. (The separate steam_prefs cloud_saves_disclaimer_accepted flag
+                            // honor it directly. (The separate steam_prefs disclaimer-accepted flag
                             // still gates the game detail page's cloud actions, which show their own disclaimer
                             // dialog; it deliberately does NOT gate this exit auto-upload.) The local Collect
                             // above stays unconditional.
