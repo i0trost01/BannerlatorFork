@@ -12864,32 +12864,22 @@ public class XServerDisplayActivity extends AppCompatActivity {
                 t.show();
             }
         }
-        // ---- Drawer opener (checked FIRST, before any swallow/forward rule below) ----
-        // WinNative parity: the panel is opened by the system Back path (its OnBackPressedCallback),
-        // i.e. the handheld's physical Back/Return button. Its gamepad B is KEYCODE_BUTTON_B and
-        // only ever CLOSES the panel. On this pad B ALSO emits KEYCODE_BACK (scan 305), whereas the
-        // Back/Return button is KEYCODE_BACK scan 157 — so match the scan code and exclude B here.
-        if (event.getKeyCode() == KeyEvent.KEYCODE_BACK
-                && event.getAction() == KeyEvent.ACTION_DOWN
-                && event.getScanCode() == BACK_BUTTON_SCAN_CODE
-                && environment != null && inGameControlsEditor == null) {
-            if (drawerLayout != null && !drawerLayout.isDrawerOpen(GravityCompat.START)) {
-                drawerLayout.openDrawer(GravityCompat.START);
-            } else if (drawerLayout != null) {
-                drawerLayout.closeDrawers();
-            }
-            return true;
-        }
-        // Gamepad B is close-only, exactly like WinNative's handleControllerMenuKey BUTTON_B branch.
-        if (event.getKeyCode() == KeyEvent.KEYCODE_BUTTON_B
+        // ---- Drawer OPENING is left entirely to onBackPressed() ----
+        // onBackPressed() is Bannerlator's equivalent of WinNative's handleNavigationBackPressed: it
+        // toggles the drawer. Intercepting KEYCODE_BACK here is what has been BLOCKING that path, so
+        // nothing below consumes BACK for the Back/Return button. The gamepad's B is a distinct
+        // KEYCODE_BUTTON_B, and on this pad may also arrive as KEYCODE_BACK (scan 305) — BOTH are
+        // matched here, but only while the drawer is OPEN (B closes it). When the drawer is closed
+        // this returns false, so B falls through to the game and never opens the panel.
+        boolean backFromGamepadB = event.getKeyCode() == KeyEvent.KEYCODE_BACK
+                && event.getScanCode() != BACK_BUTTON_SCAN_CODE;
+        if ((event.getKeyCode() == KeyEvent.KEYCODE_BUTTON_B || backFromGamepadB)
                 && event.getDevice() != null
                 && ExternalController.isGameController(event.getDevice())
-                && environment != null && inGameControlsEditor == null) {
-            if (event.getAction() == KeyEvent.ACTION_DOWN
-                    && drawerLayout != null && drawerLayout.isDrawerOpen(GravityCompat.START)) {
-                drawerLayout.closeDrawers();
-            }
-            return false; // not consumed when the drawer is closed -> B reaches the game
+                && environment != null && inGameControlsEditor == null
+                && drawerLayout != null && drawerLayout.isDrawerOpen(GravityCompat.START)) {
+            if (event.getAction() == KeyEvent.ACTION_DOWN) drawerLayout.closeDrawers();
+            return true;
         }
         // While the drawer is open, a controller drives the drawer, not the guest. Compose's
         // focus system handles D-pad traversal; A is remapped to DPAD_CENTER so the focused item
