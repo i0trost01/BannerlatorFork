@@ -12921,9 +12921,13 @@ public class XServerDisplayActivity extends AppCompatActivity {
             }
         }
 
-        // Fallback to existing input handling
-        return (!inputControlsView.onKeyEvent(event) && !winHandler.onKeyEvent(event) && xServer.keyboard.onKeyEvent(event)) ||
-                (!ExternalController.isGameController(event.getDevice()) && super.dispatchKeyEvent(event));
+        // WinNative parity: the fallthrough must reach super for EVERY device, game controllers
+        // included. Gating it on !isGameController swallowed the pad's KEYCODE_BACK before it could
+        // reach onBackPressed()/OnBackPressedDispatcher — the reason Back never opened the drawer.
+        boolean handledByGuest = inputControlsView.onKeyEvent(event)
+                || winHandler.onKeyEvent(event)
+                || xServer.keyboard.onKeyEvent(event);
+        return handledByGuest || super.dispatchKeyEvent(event);
     }
 
     /**
