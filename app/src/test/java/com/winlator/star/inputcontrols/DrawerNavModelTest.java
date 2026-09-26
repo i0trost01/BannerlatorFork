@@ -12,6 +12,7 @@ public class DrawerNavModelTest {
     private static final int DPAD_DOWN = 20;
     private static final int DPAD_LEFT = 21;
     private static final int DPAD_RIGHT = 22;
+    private static final int DPAD_CENTER = 23;
     private static final int BUTTON_A = 96;
     private static final int BUTTON_B = 97;
 
@@ -23,9 +24,10 @@ public class DrawerNavModelTest {
         assertEquals(1, DrawerNavModel.railIndexDelta(DPAD_DOWN));
     }
 
-    @Test public void horizontalDpadDoesNotMoveTheRail() {
+    @Test public void nonVerticalKeysDoNotMoveTheRail() {
         assertEquals(0, DrawerNavModel.railIndexDelta(DPAD_LEFT));
         assertEquals(0, DrawerNavModel.railIndexDelta(DPAD_RIGHT));
+        assertEquals(0, DrawerNavModel.railIndexDelta(BUTTON_B));
     }
 
     @Test public void railIndexIsClampedIntoRange() {
@@ -34,8 +36,9 @@ public class DrawerNavModelTest {
         assertEquals(2, DrawerNavModel.clampRailIndex(2, 5));
     }
 
-    @Test public void emptyRailClampsToZero() {
+    @Test public void emptyOrNegativeRailSizeClampsToZero() {
         assertEquals(0, DrawerNavModel.clampRailIndex(3, 0));
+        assertEquals(0, DrawerNavModel.clampRailIndex(3, -5));
     }
 
     @Test public void railNavigationKeysAreRecognised() {
@@ -43,6 +46,7 @@ public class DrawerNavModelTest {
         assertTrue(DrawerNavModel.isRailNavigationKey(DPAD_DOWN));
         assertTrue(DrawerNavModel.isRailNavigationKey(DPAD_LEFT));
         assertTrue(DrawerNavModel.isRailNavigationKey(DPAD_RIGHT));
+        assertTrue(DrawerNavModel.isRailNavigationKey(DPAD_CENTER));
         assertTrue(DrawerNavModel.isRailNavigationKey(BUTTON_A));
         assertFalse(DrawerNavModel.isRailNavigationKey(BUTTON_B));
     }
