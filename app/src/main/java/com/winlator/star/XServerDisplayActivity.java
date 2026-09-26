@@ -12813,21 +12813,39 @@ public class XServerDisplayActivity extends AppCompatActivity {
             super.dispatchKeyEvent(event);
             return true;
         }
-        // DIAGNOSTIC (temporary): identify which physical button sends which key/scan code.
-        // Press B once and the Return/Back button once; read `adb logcat -s WinInput`.
+        // DIAGNOSTIC (temporary): show the key/scan code on screen for the "menu-ish" gamepad
+        // buttons, so we can tell the back button apart from B without adb. Press back once, then B.
         if (event.getDevice() != null && ExternalController.isGameController(event.getDevice())) {
-            android.util.Log.i("WinInput", "kc=" + event.getKeyCode()
-                    + " (" + KeyEvent.keyCodeToString(event.getKeyCode()) + ")"
+            int dkc = event.getKeyCode();
+            android.util.Log.i("WinInput", "kc=" + dkc
+                    + " (" + KeyEvent.keyCodeToString(dkc) + ")"
                     + " scan=" + event.getScanCode()
                     + " act=" + event.getAction()
-                    + " src=0x" + Integer.toHexString(event.getSource())
-                    + " dev=" + event.getDevice().getName()
-                    + " desc=" + event.getDevice().getDescriptor());
+                    + " dev=" + event.getDevice().getName());
+            if (event.getAction() == KeyEvent.ACTION_DOWN
+                    && (dkc == KeyEvent.KEYCODE_BACK || dkc == KeyEvent.KEYCODE_BUTTON_MODE
+                        || dkc == KeyEvent.KEYCODE_HOME || dkc == KeyEvent.KEYCODE_BUTTON_SELECT
+                        || dkc == KeyEvent.KEYCODE_BUTTON_B)) {
+                android.widget.Toast.makeText(this,
+                        "kc=" + dkc + " scan=" + event.getScanCode(), android.widget.Toast.LENGTH_SHORT).show();
+            }
         }
-        // In-game drawer opener — matches WinNative's panel: HOLD the Guide/Mode button (~0.5 s) to
-        // open (a fresh press closes while open). Home/Select are swallowed. The pad's Back/B is NOT
-        // the opener: a controller BACK is forwarded to the game and consumed, so it can't toggle the
-        // drawer via onBackPressed and B stays usable in-game.
+        // In-game drawer opener — WinNative parity. WinNative opens its panel from the system Back
+        // handler (`handleNavigationBackPressed` registered as its OnBackPressedCallback), i.e. the
+        // handheld's Back button. We toggle the drawer on BACK here as well, because a controller
+        // BACK would otherwise be swallowed by the guest input fallbacks below before Android's back
+        // handling ever sees it. While the drawer is open, BACK closes it.
+        if (event.getKeyCode() == KeyEvent.KEYCODE_BACK
+                && event.getAction() == KeyEvent.ACTION_DOWN
+                && environment != null && inGameControlsEditor == null) {
+            if (drawerLayout != null && !drawerLayout.isDrawerOpen(GravityCompat.START)) {
+                drawerLayout.openDrawer(GravityCompat.START);
+            } else if (drawerLayout != null) {
+                drawerLayout.closeDrawers();
+            }
+            return true;
+        }
+        // Secondary opener for pads that have a dedicated Guide/Mode button: HOLD it (~0.5 s).
         if (event.getKeyCode() == KeyEvent.KEYCODE_BUTTON_MODE
                 && environment != null && inGameControlsEditor == null) {
             if (event.getAction() == KeyEvent.ACTION_DOWN) {
@@ -12852,16 +12870,6 @@ public class XServerDisplayActivity extends AppCompatActivity {
                     || event.getKeyCode() == KeyEvent.KEYCODE_BUTTON_SELECT)
                 && environment != null && inGameControlsEditor == null) {
             return true; // swallow Home/Select, per WinNative
-        }
-        if (event.getKeyCode() == KeyEvent.KEYCODE_BACK
-                && event.getDevice() != null
-                && ExternalController.isGameController(event.getDevice())
-                && environment != null && inGameControlsEditor == null) {
-            // The handheld's Back/B is a game input: forward it and never let it toggle the drawer.
-            if (inputControlsView != null && inputControlsView.onKeyEvent(event)) return true;
-            if (winHandler != null && winHandler.onKeyEvent(event)) return true;
-            if (xServer != null && xServer.keyboard != null && xServer.keyboard.onKeyEvent(event)) return true;
-            return true;
         }
         // While the drawer is open, a controller drives the drawer, not the guest. Compose's
         // focus system handles D-pad traversal; A is remapped to DPAD_CENTER so the focused item
