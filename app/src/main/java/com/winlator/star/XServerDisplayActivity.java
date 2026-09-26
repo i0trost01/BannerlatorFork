@@ -12640,8 +12640,18 @@ public class XServerDisplayActivity extends AppCompatActivity {
     /** Sends a synthetic D-pad DOWN+UP pair — one move the Compose focus system reacts to. */
     private void sendDrawerDpadTap(int keyCode) {
         long t = android.os.SystemClock.uptimeMillis();
-        super.dispatchKeyEvent(new KeyEvent(t, t, KeyEvent.ACTION_DOWN, keyCode, 0));
-        super.dispatchKeyEvent(new KeyEvent(t, t, KeyEvent.ACTION_UP, keyCode, 0));
+        dispatchToDrawer(new KeyEvent(t, t, KeyEvent.ACTION_DOWN, keyCode, 0));
+        dispatchToDrawer(new KeyEvent(t, t, KeyEvent.ACTION_UP, keyCode, 0));
+    }
+
+    /**
+     * Delivers a synthetic key straight to the drawer's ComposeView so Compose's focus system (which
+     * lives on the inner AndroidComposeView) sees it. Falling back to super only when the drawer view
+     * is absent — routing through the Activity can be swallowed by the game surface/overlay instead.
+     */
+    private void dispatchToDrawer(KeyEvent event) {
+        if (drawerComposeView != null) drawerComposeView.dispatchKeyEvent(event);
+        else super.dispatchKeyEvent(event);
     }
 
     private Runnable drawerStickRepeatRunnable(final int dir, final int keyCode) {
@@ -12811,9 +12821,13 @@ public class XServerDisplayActivity extends AppCompatActivity {
                 return true;
             }
             if (kc == KeyEvent.KEYCODE_BUTTON_A) {
-                return super.dispatchKeyEvent(new KeyEvent(event.getAction(), KeyEvent.KEYCODE_DPAD_CENTER));
+                // Route to the drawer's ComposeView so the focused clickable activates.
+                dispatchToDrawer(new KeyEvent(event.getAction(), KeyEvent.KEYCODE_DPAD_CENTER));
+                return true;
             }
-            return super.dispatchKeyEvent(event);
+            // D-pad etc.: deliver straight to the drawer so Compose focus traversal runs.
+            dispatchToDrawer(event);
+            return true;
         }
         // A physical pad moving/pressing: the player is not using the pointer, so let the Wayland
         // overlay cursor hide (see waylandCursorPoke).
