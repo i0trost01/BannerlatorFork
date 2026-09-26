@@ -349,7 +349,7 @@ class MainActivity : AppCompatActivity() {
 
         if (shortcutPath.isNullOrEmpty()) return false
         startActivity(Intent(this, XServerDisplayActivity::class.java).apply {
-            action = Intent.ACTION_VIEW
+            setAction(Intent.ACTION_VIEW)
             putExtra("shortcut_path", shortcutPath)
             putExtra("container_id", containerId)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
