@@ -465,6 +465,9 @@ class MainActivity : AppCompatActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        // A front-end launch while MainActivity is already alive (singleTop/singleTask relaunch):
+        // forward to the session activity before any in-app route handling.
+        if (maybeForwardFrontendLaunch()) return
         // Deep-link from the store activities (CLEAR_TOP|SINGLE_TOP relaunch).
         validRouteOrNull(intent.getStringExtra(EXTRA_OPEN_SCREEN))?.let {
             pendingRoute.value = it
