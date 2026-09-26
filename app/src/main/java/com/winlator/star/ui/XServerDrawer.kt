@@ -99,7 +99,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
@@ -199,13 +198,6 @@ fun XServerDrawer() {
             .focusRequester(rootFocus)
             .focusable()
             .focusGroup()
-            .onPreviewKeyEvent { e ->
-                if (e.type == KeyEventType.KeyDown &&
-                    (e.key == Key.Back || e.key == Key.Escape) &&
-                    XServerDrawerState.onClose != null) {
-                    XServerDrawerState.onClose!!.run(); true
-                } else false
-            }
             .background(surface)
     ) {
         BoxWithConstraints(
@@ -4425,16 +4417,6 @@ private fun AdvancedContent(state: XServerDrawerState) {
     }
     AdvancedActionRow("Debug Logs", R.drawable.icon_debug) {
         state.onClose?.run(); state.onLogs?.run()
-    }
-    // TEMPORARY diagnostic readout (see GamepadKeyDiag) — the last gamepad buttons' key/scan codes,
-    // so the Back-vs-B mapping can be read in-app when a toast is unreadable over the game surface.
-    val keyDiag by GamepadKeyDiag.entries
-    if (keyDiag.isNotEmpty()) {
-        Spacer(Modifier.height(10.dp))
-        SectionHeader("Gamepad keys (debug)")
-        keyDiag.forEach { line ->
-            Text(line, color = LocalAccentDim.current, fontSize = 12.sp)
-        }
     }
     AdvancedActionRow("Picture-in-Picture", R.drawable.ic_picture_in_picture_alt) {
         state.onClose?.run(); state.onPipMode?.run()
