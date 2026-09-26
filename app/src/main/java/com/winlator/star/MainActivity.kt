@@ -359,10 +359,20 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (shortcutPath.isNullOrEmpty()) return false
+        // WinNative parity: forward the shortcut identity too. Best-effort - a null lookup must not
+        // change the existing behavior (the session activity works from shortcut_path alone).
+        val forwarded = runCatching {
+            containerManager.reloadContainers()
+            containerManager.loadShortcuts().firstOrNull { it.file.absolutePath == shortcutPath }
+        }.getOrNull()
         startActivity(Intent(this, XServerDisplayActivity::class.java).apply {
             setAction(Intent.ACTION_VIEW)
             putExtra("shortcut_path", shortcutPath)
             putExtra("container_id", containerId)
+            forwarded?.let {
+                putExtra("shortcut_name", it.name)
+                putExtra("shortcut_uuid", it.getExtra("uuid"))
+            }
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         })
         finish()

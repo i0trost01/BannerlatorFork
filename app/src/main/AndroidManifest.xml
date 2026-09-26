@@ -97,6 +97,26 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- Front-end launch (Daijisho/Beacon/ES-DE): an implicit VIEW of an exported .desktop URI
+                 (e.g. `am start -a android.intent.action.VIEW -d {file.uri}`). MainActivity parses it in
+                 maybeForwardFrontendLaunch() and forwards to XServerDisplayActivity - the same role
+                 WinNative's UnifiedActivity plays. Without this filter the intent matches no activity and
+                 the front end falls back to a plain launch, opening the games list instead of the game. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:scheme="file"/>
+                <data android:scheme="content"/>
+                <data android:mimeType="application/x-desktop"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:scheme="file"/>
+                <data android:scheme="content"/>
+                <data android:host="*"/>
+                <data android:pathPattern=".*\\.desktop"/>
+            </intent-filter>
         </activity>
 
         <!-- colorMode|touchscreen|uiMode on top of the usual set so MOVING BETWEEN DISPLAYS does not
