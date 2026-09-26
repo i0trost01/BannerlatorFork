@@ -109,4 +109,21 @@ public class DrawerNavModelTest {
         assertEquals(DrawerNavModel.PanelMove.NONE,
                 DrawerNavModel.panelMove(DPAD_UP, 0, 0, 0, 0));
     }
+
+    @Test public void singleColumnSwallowsHorizontalKeysEvenOutOfRange() {
+        assertEquals(DrawerNavModel.PanelMove.NONE,
+                DrawerNavModel.panelMove(DPAD_LEFT, 0, 1, 2, 1));
+        assertEquals(DrawerNavModel.PanelMove.NONE,
+                DrawerNavModel.panelMove(DPAD_RIGHT, 0, 1, 2, 1));
+    }
+
+    @Test public void nonDirectionalKeyDoesNotMoveThePanel() {
+        assertEquals(DrawerNavModel.PanelMove.NONE,
+                DrawerNavModel.panelMove(BUTTON_A, 0, 3, 1, 2));
+    }
+
+    @Test public void negativeRowCountSwallowsDirectionalKeys() {
+        assertEquals(DrawerNavModel.PanelMove.NONE,
+                DrawerNavModel.panelMove(DPAD_DOWN, 0, -1, 0, 2));
+    }
 }
