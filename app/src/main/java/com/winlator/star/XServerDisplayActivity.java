@@ -3224,10 +3224,30 @@ public class XServerDisplayActivity extends AppCompatActivity {
 
     private int steamAppIdOfShortcut(Shortcut sc) {
         try {
-            return Integer.parseInt(sc.getExtra("steamAppId", "0").trim());
+            int tagged = Integer.parseInt(sc.getExtra("steamAppId", "0").trim());
+            if (tagged > 0) return tagged;
         } catch (NumberFormatException e) {
-            return 0;
+            // fall through to derive
         }
+        // Most Steam shortcuts added from the Library tab / Download Manager are UNTAGGED (no
+        // steamAppId extra). Derive the id the same way the exporter and WinNative do: match the
+        // exec path's steam_games/<folder> against the installed-games DB. Without this a front-end
+        // launch (Daijisho -> app_id) resolves nothing and the game never starts.
+        try {
+            String folder = steamGamesFolderOf(sc.path);
+            if (folder != null) {
+                java.util.List<com.winlator.star.store.SteamDatabase.GameRow> installed =
+                        com.winlator.star.store.SteamRepository.getInstance().getDatabase().getInstalledGames();
+                if (installed != null) {
+                    for (com.winlator.star.store.SteamDatabase.GameRow r : installed) {
+                        if (installDirMatchesFolder(r.installDir, folder)) return r.appId;
+                    }
+                }
+            }
+        } catch (Throwable t) {
+            // DB not ready / Steam not signed in — no id derivable.
+        }
+        return 0;
     }
 
     /**
