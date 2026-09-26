@@ -285,6 +285,9 @@ public class XServerDisplayActivity extends AppCompatActivity {
     // usable in-game. On this device KEYCODE_BACK is the only reliably-delivered "menu" key (KEYCODE_HOME
     // is consumed by Android before apps see it). WinNative's in-game menu uses the same hold-to-open idea.
     private static final long DRAWER_BACK_HOLD_MS = 450L;
+    // The handheld's physical Back/Return button scan code (Odin 2 Portal: kc=4 scan=157). The
+    // drawer opener matches this so the pad's B (also KEYCODE_BACK on some ROMs) never opens it.
+    private static final int BACK_BUTTON_SCAN_CODE = 157;
     private boolean drawerBackHoldPending = false;
     private boolean drawerBackHoldFired = false;
     private final android.os.Handler drawerBackHoldHandler = new android.os.Handler(android.os.Looper.getMainLooper());
@@ -12861,19 +12864,31 @@ public class XServerDisplayActivity extends AppCompatActivity {
                 t.show();
             }
         }
-        // In-game drawer opener — WinNative parity. WinNative opens its panel from the system Back
-        // handler (`handleNavigationBackPressed` registered as its OnBackPressedCallback), i.e. the
-        // handheld's Back button. We toggle the drawer on BACK here as well, because a controller
-        // BACK would otherwise be swallowed by the guest input fallbacks below before Android's back
-        // handling ever sees it. While the drawer is open, BACK closes it.
+        // In-game drawer opener — WinNative parity (system Back handler), gated to the handheld's
+        // PHYSICAL Back/Return button. The Odin delivers B as KEYCODE_BACK too (kc=4 scan=305) as
+        // well as a distinct KEYCODE_BUTTON_B (kc=97 scan=305); matching on the scan code lets the
+        // Back button open the panel while B stays a pure game button.
         if (event.getKeyCode() == KeyEvent.KEYCODE_BACK
                 && event.getAction() == KeyEvent.ACTION_DOWN
+                && event.getScanCode() == BACK_BUTTON_SCAN_CODE
                 && environment != null && inGameControlsEditor == null) {
             if (drawerLayout != null && !drawerLayout.isDrawerOpen(GravityCompat.START)) {
                 drawerLayout.openDrawer(GravityCompat.START);
             } else if (drawerLayout != null) {
                 drawerLayout.closeDrawers();
             }
+            return true;
+        }
+        // A controller BACK/B that is NOT the physical Back button (e.g. the pad's B) is a game
+        // input — forward it and never let it reach Android's back handling (which would toggle the
+        // drawer via onBackPressed).
+        if (event.getKeyCode() == KeyEvent.KEYCODE_BACK
+                && event.getDevice() != null
+                && ExternalController.isGameController(event.getDevice())
+                && environment != null && inGameControlsEditor == null) {
+            if (inputControlsView != null && inputControlsView.onKeyEvent(event)) return true;
+            if (winHandler != null && winHandler.onKeyEvent(event)) return true;
+            if (xServer != null && xServer.keyboard != null && xServer.keyboard.onKeyEvent(event)) return true;
             return true;
         }
         // Secondary opener for pads that have a dedicated Guide/Mode button: HOLD it (~0.5 s).
