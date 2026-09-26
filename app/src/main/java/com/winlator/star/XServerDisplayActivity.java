@@ -12789,20 +12789,16 @@ public class XServerDisplayActivity extends AppCompatActivity {
                     + " dev=" + event.getDevice().getName()
                     + " desc=" + event.getDevice().getDescriptor());
         }
-        // Gamepad BACK (the pad's Back/Return button; B maps to the same key on this ROM): a HOLD
-        // opens the in-game drawer, a quick TAP is forwarded to the game so B stays usable in-game.
-        // While the drawer is open a tap closes it. Handled before the guest fallbacks so it never
-        // reaches Android's window back handling (onBackPressed -> drawer toggle).
-        if (event.getKeyCode() == KeyEvent.KEYCODE_BACK
-                && event.getDevice() != null
-                && ExternalController.isGameController(event.getDevice())
+        // In-game drawer opener — matches WinNative's panel: HOLD the Guide/Mode button (~0.5 s) to
+        // open (a fresh press closes while open). Home/Select are swallowed. The pad's Back/B is NOT
+        // the opener: a controller BACK is forwarded to the game and consumed, so it can't toggle the
+        // drawer via onBackPressed and B stays usable in-game.
+        if (event.getKeyCode() == KeyEvent.KEYCODE_BUTTON_MODE
                 && environment != null && inGameControlsEditor == null) {
-            if (drawerLayout != null && drawerLayout.isDrawerOpen(GravityCompat.START)) {
-                if (event.getAction() == KeyEvent.ACTION_DOWN) drawerLayout.closeDrawers();
-                return true;
-            }
             if (event.getAction() == KeyEvent.ACTION_DOWN) {
-                if (!drawerBackHoldPending) {
+                if (drawerLayout != null && drawerLayout.isDrawerOpen(GravityCompat.START)) {
+                    drawerLayout.closeDrawers();
+                } else if (!drawerBackHoldPending) {
                     drawerBackHoldPending = true;
                     drawerBackHoldFired = false;
                     drawerBackHoldHandler.removeCallbacks(drawerBackHoldRunnable);
@@ -12812,13 +12808,25 @@ public class XServerDisplayActivity extends AppCompatActivity {
             } else if (event.getAction() == KeyEvent.ACTION_UP) {
                 drawerBackHoldHandler.removeCallbacks(drawerBackHoldRunnable);
                 drawerBackHoldPending = false;
-                if (drawerBackHoldFired) {
-                    drawerBackHoldFired = false;
-                    return true;
-                }
-                forwardBackTapToGuest();
+                drawerBackHoldFired = false;
                 return true;
             }
+        }
+        if (event.getAction() == KeyEvent.ACTION_DOWN
+                && (event.getKeyCode() == KeyEvent.KEYCODE_HOME
+                    || event.getKeyCode() == KeyEvent.KEYCODE_BUTTON_SELECT)
+                && environment != null && inGameControlsEditor == null) {
+            return true; // swallow Home/Select, per WinNative
+        }
+        if (event.getKeyCode() == KeyEvent.KEYCODE_BACK
+                && event.getDevice() != null
+                && ExternalController.isGameController(event.getDevice())
+                && environment != null && inGameControlsEditor == null) {
+            // The handheld's Back/B is a game input: forward it and never let it toggle the drawer.
+            if (inputControlsView != null && inputControlsView.onKeyEvent(event)) return true;
+            if (winHandler != null && winHandler.onKeyEvent(event)) return true;
+            if (xServer != null && xServer.keyboard != null && xServer.keyboard.onKeyEvent(event)) return true;
+            return true;
         }
         // While the drawer is open, a controller drives the drawer, not the guest. Compose's
         // focus system handles D-pad traversal; A is remapped to DPAD_CENTER so the focused item
