@@ -94,6 +94,7 @@ import com.winlator.star.ui.screens.SplashViewModel
 import com.winlator.star.ui.theme.AppThemeState
 import com.winlator.star.ui.theme.WinlatorTheme
 import kotlinx.coroutines.launch
+import com.winlator.star.core.FileUtils
 import java.io.File
 
 class MainActivity : AppCompatActivity() {
@@ -338,14 +339,86 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+
+        // WinNative parity: a front end may pass the exported `.desktop` itself as the intent DATA
+        // (`-a android.intent.action.VIEW -d {file.uri}`). Resolve the URI to a real file path; if it
+        // parses as a shortcut .desktop, hand it to the session activity the same way.
+        if (shortcutPath.isNullOrEmpty()) {
+            shortcutPath = resolveIncomingDesktopPath(src)
+        }
+
         if (shortcutPath.isNullOrEmpty()) return false
         startActivity(Intent(this, XServerDisplayActivity::class.java).apply {
+            action = Intent.ACTION_VIEW
             putExtra("shortcut_path", shortcutPath)
             putExtra("container_id", containerId)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         })
         finish()
         return true
+    }
+
+    /**
+     * Resolve an incoming `.desktop` from the intent — data URI, clip item, or any extra — copied
+     * from WinNative's `resolveIncomingDesktopPath`/`materializeDesktop`. Returns an absolute file
+     * path, or null when nothing looks like a shortcut.
+     */
+    private fun resolveIncomingDesktopPath(source: Intent): String? {
+        materializeDesktop(source.data)?.let { return it }
+        source.clipData?.let { clip ->
+            for (i in 0 until clip.itemCount) {
+                materializeDesktop(clip.getItemAt(i).uri)?.let { return it }
+                materializeDesktop(clip.getItemAt(i).text)?.let { return it }
+            }
+        }
+        val extras = source.extras ?: return null
+        for (key in extras.keySet()) {
+            materializeDesktop(extras.get(key))?.let { return it }
+        }
+        return null
+    }
+
+    private fun materializeDesktop(value: Any?): String? = when (value) {
+        is Uri -> materializeDesktopUri(value)
+        is String ->
+            if (value.startsWith("content://") || value.startsWith("file://")) {
+                materializeDesktopUri(Uri.parse(value))
+            } else {
+                File(value).takeIf { it.isFile && looksLikeDesktopFile(it) }?.absolutePath
+            }
+        else -> null
+    }
+
+    private fun materializeDesktopUri(uri: Uri): String? {
+        when (uri.scheme?.lowercase()) {
+            "file" -> {
+                val f = uri.path?.let { File(it) }
+                if (f != null && f.isFile && looksLikeDesktopFile(f)) return f.absolutePath
+            }
+            "content" -> {
+                val resolved = FileUtils.getFilePathFromUri(this, uri)
+                if (!resolved.isNullOrEmpty()) {
+                    val f = File(resolved)
+                    if (f.isFile && looksLikeDesktopFile(f)) return f.absolutePath
+                }
+                return runCatching {
+                    val out = File(cacheDir, "frontend_launch.desktop")
+                    val copied = contentResolver.openInputStream(uri)?.use { input ->
+                        out.outputStream().use { output -> input.copyTo(output) }; true
+                    } ?: false
+                    if (copied && out.isFile && looksLikeDesktopFile(out)) out.absolutePath else null
+                }.getOrNull()
+            }
+        }
+        return null
+    }
+
+    private fun looksLikeDesktopFile(file: File): Boolean {
+        if (!file.isFile || file.length() > 1_000_000L) return false
+        return runCatching {
+            val text = file.readText()
+            text.contains("[Desktop Entry]") || text.contains("container_id")
+        }.getOrDefault(false)
     }
 
     private fun launchStore(screen: Screen) {
