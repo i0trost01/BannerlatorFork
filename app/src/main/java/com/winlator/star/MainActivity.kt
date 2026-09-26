@@ -316,6 +316,9 @@ class MainActivity : AppCompatActivity() {
     private fun maybeForwardFrontendLaunch(): Boolean {
         val src = intent ?: return false
         val action = src.action
+        // WinNative-style diagnostic: dump what the front end actually sent and what we resolved.
+        android.util.Log.d("FrontendLaunch", "incoming: action=$action data=${src.dataString}"
+                + " extras=[${src.extras?.keySet()?.joinToString(", ") { "$it=${src.extras!!.get(it)}" } ?: "none"}]")
         val gnAction = action == "app.gamenative.LAUNCH_GAME"
         val gnUri = action == Intent.ACTION_VIEW &&
                 src.data?.scheme?.equals("gamenative", true) == true &&
@@ -348,6 +351,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (shortcutPath.isNullOrEmpty()) return false
+        android.util.Log.d("FrontendLaunch", "forwarding to session: shortcut_path=$shortcutPath container=$containerId")
         startActivity(Intent(this, XServerDisplayActivity::class.java).apply {
             setAction(Intent.ACTION_VIEW)
             putExtra("shortcut_path", shortcutPath)
