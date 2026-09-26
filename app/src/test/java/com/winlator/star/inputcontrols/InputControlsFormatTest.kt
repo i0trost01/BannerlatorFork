@@ -512,7 +512,7 @@ class InputControlsFormatTest {
 
     @Test
     fun fakeInputWriter_bufferFitsOneCompleteXboxUpdate() {
-        assertEquals(29, FakeInputWriter.MAX_EVENTS_PER_UPDATE)
+        assertEquals(32, FakeInputWriter.MAX_EVENTS_PER_UPDATE)
     }
 
     @Test
