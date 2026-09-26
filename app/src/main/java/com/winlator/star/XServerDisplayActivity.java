@@ -2537,6 +2537,21 @@ public class XServerDisplayActivity extends AppCompatActivity {
             Log.d("XServerDisplayActivity", "No shortcut path provided, skipping shortcut parsing.");
         }
 
+        // GameNative frontend launch (Daijisho stock Steam platform / Beacon): resolve by Steam
+        // app id to a shortcut BEFORE the container lookup, because a protocol intent carries no
+        // container_id (so it must set containerId from the resolved shortcut first).
+        if (isGameNativeLaunchIntent(getIntent())) {
+            Shortcut gnShortcut = resolveGameNativeLaunch(getIntent());
+            if (gnShortcut != null) {
+                shortcutPath = gnShortcut.file.getAbsolutePath();
+                containerId = gnShortcut.container.id;
+                shortcutName = gnShortcut.name;
+                Log.d("XServerDisplayActivity", "GameNative launch resolved: " + shortcutPath);
+            } else {
+                Log.w("XServerDisplayActivity", "GameNative launch intent had no matching Steam shortcut");
+            }
+        }
+
         // Increment play count at the start of a session
         incrementPlayCount();
 
@@ -2550,21 +2565,6 @@ public class XServerDisplayActivity extends AppCompatActivity {
             Log.e("XServerDisplayActivity", "Failed to retrieve container with ID: " + containerId);
             finish();  // Gracefully exit the activity to avoid crashing
             return;
-        }
-
-        // GameNative frontend launch (Daijisho stock Steam platform / Beacon): resolve by Steam
-        // app id to a shortcut and feed the normal launch pipeline the same fields it expects.
-        if (isGameNativeLaunchIntent(getIntent())) {
-            Shortcut gnShortcut = resolveGameNativeLaunch(getIntent());
-            if (gnShortcut != null) {
-                shortcutPath = gnShortcut.file.getAbsolutePath();
-                container = gnShortcut.container;
-                containerId = gnShortcut.container.id;
-                shortcutName = gnShortcut.name;
-                Log.d("XServerDisplayActivity", "GameNative launch resolved: " + shortcutPath);
-            } else {
-                Log.w("XServerDisplayActivity", "GameNative launch intent had no matching Steam shortcut");
-            }
         }
 
         // Initialise the Steam DB singleton in THIS process. A game launched directly (from a
@@ -12599,6 +12599,13 @@ public class XServerDisplayActivity extends AppCompatActivity {
     public boolean dispatchGenericMotionEvent(MotionEvent event) {
         if (inGameControlsEditor != null) {
             super.dispatchGenericMotionEvent(event);
+            return true;
+        }
+        // While the drawer is open, a controller must not drive the guest. Consume controller
+        // motion (sticks/triggers) so only the key-based Compose navigation above applies.
+        if (drawerLayout != null && drawerLayout.isDrawerOpen(GravityCompat.START)
+                && event.getDevice() != null
+                && ExternalController.isGameController(event.getDevice())) {
             return true;
         }
         // A physical pad moving/pressing: the player is not using the pointer, so let the Wayland
