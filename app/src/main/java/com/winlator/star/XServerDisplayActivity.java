@@ -268,6 +268,18 @@ public class XServerDisplayActivity extends AppCompatActivity {
     private boolean controllerTestGuideDown = false;
     private long lastControllerTestAxisLogMs = 0L;
 
+    // Drawer controller navigation: the AYN Odin's built-in pad reports its D-pad as AXIS_HAT_X/Y
+    // and the left stick as AXIS_X/Y, both as generic motion. While the drawer is open those are
+    // translated into synthetic D-pad key taps so Compose focus traversal (and the focus ring) work;
+    // the drawer consumes the motion instead of leaking it to the guest. Held directions auto-repeat.
+    private static final float DRAWER_STICK_DEADZONE = 0.5f;
+    private static final long DRAWER_STICK_FIRST_DELAY_MS = 250L;
+    private static final long DRAWER_STICK_REPEAT_MS = 130L;
+    private static final int DRAWER_DPAD_UP = 0, DRAWER_DPAD_DOWN = 1, DRAWER_DPAD_LEFT = 2, DRAWER_DPAD_RIGHT = 3;
+    private final boolean[] drawerStickHeld = new boolean[4];
+    private final Runnable[] drawerStickRepeatRunnables = new Runnable[4];
+    private final android.os.Handler drawerStickRepeatHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+
     private XEnvironment environment;
     private DrawerLayout drawerLayout;
     private ComposeView drawerComposeView;
@@ -1919,6 +1931,7 @@ public class XServerDisplayActivity extends AppCompatActivity {
                 // Hide the on-handheld "playing on external display" badge while the menu is open so
                 // it doesn't overlap the drawer content.
                 XServerDialogState.INSTANCE.setMenuOpen(true);
+                resetDrawerStickNavigation();
                 // Menu owns the controller while open — flush a neutral state
                 // once so a held stick / pressed button / latched trigger from
                 // the last frame doesn't stay applied in the guest.
@@ -1932,6 +1945,7 @@ public class XServerDisplayActivity extends AppCompatActivity {
             }
             @Override public void onDrawerClosed(@NonNull View drawerView) {
                 XServerDialogState.INSTANCE.setMenuOpen(false);
+                resetDrawerStickNavigation();
                 // If the user left Relative Mouse enabled, recapture.
                 if (isRelativeMouseMovement && !pointerCaptureRequested) {
                     drawerLayout.postDelayed(() -> ensurePointerCapture("drawer-closed"), 2000);
@@ -6964,6 +6978,7 @@ public class XServerDisplayActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
+        resetDrawerStickNavigation();
         // The last word on the handheld's companion screen, whatever took this session down (Exit, the
         // game's own watcher, a recents swipe, the system). Every other dismissal is about telling the
         // user something sooner; this one is the guarantee that nothing is left on the handheld
@@ -12595,18 +12610,77 @@ public class XServerDisplayActivity extends AppCompatActivity {
         }
     }
 }
+    /** Sends a synthetic D-pad DOWN+UP pair — one move the Compose focus system reacts to. */
+    private void sendDrawerDpadTap(int keyCode) {
+        long t = android.os.SystemClock.uptimeMillis();
+        super.dispatchKeyEvent(new KeyEvent(t, t, KeyEvent.ACTION_DOWN, keyCode, 0));
+        super.dispatchKeyEvent(new KeyEvent(t, t, KeyEvent.ACTION_UP, keyCode, 0));
+    }
+
+    private Runnable drawerStickRepeatRunnable(final int dir, final int keyCode) {
+        Runnable r = drawerStickRepeatRunnables[dir];
+        if (r == null) {
+            r = new Runnable() {
+                @Override public void run() {
+                    if (!drawerStickHeld[dir]) return;
+                    sendDrawerDpadTap(keyCode);
+                    drawerStickRepeatHandler.postDelayed(this, DRAWER_STICK_REPEAT_MS);
+                }
+            };
+            drawerStickRepeatRunnables[dir] = r;
+        }
+        return r;
+    }
+
+    /** Edge-triggers one direction: the first crossing fires immediately, then repeats while held. */
+    private void setDrawerStickDirection(int dir, boolean active, int keyCode) {
+        if (active == drawerStickHeld[dir]) return;
+        drawerStickHeld[dir] = active;
+        Runnable repeat = drawerStickRepeatRunnable(dir, keyCode);
+        if (active) {
+            sendDrawerDpadTap(keyCode);
+            drawerStickRepeatHandler.postDelayed(repeat, DRAWER_STICK_FIRST_DELAY_MS);
+        } else {
+            drawerStickRepeatHandler.removeCallbacks(repeat);
+        }
+    }
+
+    /** Cancels pending repeats and clears held state (drawer closed / activity torn down). */
+    private void resetDrawerStickNavigation() {
+        drawerStickRepeatHandler.removeCallbacksAndMessages(null);
+        for (int i = 0; i < drawerStickHeld.length; i++) drawerStickHeld[i] = false;
+    }
+
+    /**
+     * Left stick (AXIS_X/Y) and D-pad hat (AXIS_HAT_X/Y) past the deadzone become D-pad key taps
+     * while the drawer is open, so the controller moves Compose focus. Returns true: the motion is
+     * owned by the drawer and must not reach the guest.
+     */
+    private boolean translateDrawerControllerMotion(MotionEvent event) {
+        float x = event.getAxisValue(MotionEvent.AXIS_X);
+        float y = event.getAxisValue(MotionEvent.AXIS_Y);
+        float hatX = event.getAxisValue(MotionEvent.AXIS_HAT_X);
+        float hatY = event.getAxisValue(MotionEvent.AXIS_HAT_Y);
+        setDrawerStickDirection(DRAWER_DPAD_UP,    y < -DRAWER_STICK_DEADZONE || hatY < -DRAWER_STICK_DEADZONE, KeyEvent.KEYCODE_DPAD_UP);
+        setDrawerStickDirection(DRAWER_DPAD_DOWN,  y >  DRAWER_STICK_DEADZONE || hatY >  DRAWER_STICK_DEADZONE, KeyEvent.KEYCODE_DPAD_DOWN);
+        setDrawerStickDirection(DRAWER_DPAD_LEFT,  x < -DRAWER_STICK_DEADZONE || hatX < -DRAWER_STICK_DEADZONE, KeyEvent.KEYCODE_DPAD_LEFT);
+        setDrawerStickDirection(DRAWER_DPAD_RIGHT, x >  DRAWER_STICK_DEADZONE || hatX >  DRAWER_STICK_DEADZONE, KeyEvent.KEYCODE_DPAD_RIGHT);
+        return true;
+    }
+
     @Override
     public boolean dispatchGenericMotionEvent(MotionEvent event) {
         if (inGameControlsEditor != null) {
             super.dispatchGenericMotionEvent(event);
             return true;
         }
-        // While the drawer is open, a controller must not drive the guest. Consume controller
-        // motion (sticks/triggers) so only the key-based Compose navigation above applies.
+        // While the drawer is open, a controller must not drive the guest. Translate the left
+        // stick / D-pad hat into synthetic D-pad keys so Compose focus traversal works, and
+        // consume the motion (sticks/triggers) so only the key-based navigation applies.
         if (drawerLayout != null && drawerLayout.isDrawerOpen(GravityCompat.START)
                 && event.getDevice() != null
                 && ExternalController.isGameController(event.getDevice())) {
-            return true;
+            return translateDrawerControllerMotion(event);
         }
         // A physical pad moving/pressing: the player is not using the pointer, so let the Wayland
         // overlay cursor hide (see waylandCursorPoke).

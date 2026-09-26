@@ -12,6 +12,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -172,8 +173,19 @@ fun XServerDrawer() {
     // Re-check the friends source on every drawer open (its liveness isn't all flow-driven).
     val menuOpen by XServerDialogState.menuOpen.collectAsState()
     val rootFocus = remember { FocusRequester() }
+    val firstFocus = remember { FocusRequester() }
     LaunchedEffect(menuOpen) {
-        if (menuOpen) runCatching { rootFocus.requestFocus() }
+        if (menuOpen) {
+            // Compose 1.6 (BOM 2024.02.00) drops the first programmatic focus request while the
+            // host AndroidComposeView is still taking window focus, so a single request left D-pad
+            // and A inert until a second press. Retry briefly and aim at the first actionable item
+            // so a visible ring appears as soon as the drawer opens.
+            repeat(10) {
+                if (runCatching { firstFocus.requestFocus() }.isSuccess) return@LaunchedEffect
+                runCatching { rootFocus.requestFocus() }
+                delay(60)
+            }
+        }
     }
     LaunchedEffect(menuOpen) { if (menuOpen) com.winlator.star.store.InGameFriendsSource.poke() }
     val pauseIcon = if (isPaused) R.drawable.icon_play else R.drawable.icon_pause
@@ -186,6 +198,7 @@ fun XServerDrawer() {
             .width(380.dp)
             .focusRequester(rootFocus)
             .focusable()
+            .focusGroup()
             .onPreviewKeyEvent { e ->
                 if (e.type == KeyEventType.KeyDown &&
                     (e.key == Key.Back || e.key == Key.Escape) &&
@@ -226,7 +239,7 @@ fun XServerDrawer() {
                 ) {
                     // Top group: section tabs
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        TabIconButton(R.drawable.icon_display, selectedTab == TabType.GRAPHICS) {
+                        TabIconButton(R.drawable.icon_display, selectedTab == TabType.GRAPHICS, Modifier.focusRequester(firstFocus)) {
                             handleTabClick(TabType.GRAPHICS, state)
                         }
                         Spacer(Modifier.height(6.dp))
@@ -639,7 +652,7 @@ private fun TvContent(state: XServerDrawerState) {
 // ───── Modern Tab Button ─────
 
 @Composable
-private fun TabIconButton(iconRes: Int, isSelected: Boolean, onClick: () -> Unit) {
+private fun TabIconButton(iconRes: Int, isSelected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val accent = MaterialTheme.colorScheme.primary
     val accentDim = LocalAccentDim.current
     // Selected = filled accent pill (accent → dim), matching the rebuild preview.
@@ -653,6 +666,7 @@ private fun TabIconButton(iconRes: Int, isSelected: Boolean, onClick: () -> Unit
 
     Box(
         modifier = Modifier
+            .then(modifier)
             .size(44.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(bgBrush, RoundedCornerShape(12.dp))
