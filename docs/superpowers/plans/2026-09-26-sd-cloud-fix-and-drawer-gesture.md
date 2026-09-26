@@ -355,21 +355,30 @@ public class NoEdgeSwipeDrawerLayout extends DrawerLayout {
     }
 
     /**
-     * Never claim a touch stream: this removes the edge-drag recognition entirely while leaving the
-     * programmatic open/close API intact. Returning false lets child views (the Compose drawer
-     * content, the game surface) keep receiving their own touches.
+     * Block the edge-drag only while the drawer is CLOSED (removing the open-on-swipe gesture the
+     * user asked to drop). While it is open, defer to super so the normal touch-to-close /
+     * scrim-tap behaviour still works.
      */
     @Override
     public boolean onInterceptTouchEvent(MotionEvent ev) {
-        return false;
+        if (!isDrawerOpen(GravityCompat.START)) return false;
+        return super.onInterceptTouchEvent(ev);
     }
 
     @Override
     public boolean onTouchEvent(MotionEvent ev) {
-        return false;
+        if (!isDrawerOpen(GravityCompat.START)) return false;
+        return super.onTouchEvent(ev);
     }
 }
 ```
+
+> **Implementation note (as built, commit `e4038c4c`):** the block is **conditional**, not
+> unconditional. Forcing both methods to always `return false` — the original plan text above the
+> note — also killed touch-to-close / scrim-tap-to-close of an already-open drawer and let touches
+> fall through to the game on the area right of the 380dp drawer. The user asked only to remove the
+> **open** swipe, so the closed-only condition is the correct behavior. Requires
+> `import androidx.core.view.GravityCompat;`.
 
 - [ ] **Step 4: Point the in-game layout at the subclass**
 

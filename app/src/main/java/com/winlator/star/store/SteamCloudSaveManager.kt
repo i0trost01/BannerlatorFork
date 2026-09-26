@@ -807,8 +807,8 @@ object SteamCloudSaveManager {
             // option parks it on the card as F:\... — resolves here too. Without this, upload (Collect)
             // matched only via the string fallback below, which strips the drive letter and so never
             // matched the absolute SD install path (download already used the full resolver, which is
-            // why a game could download but not upload). resolveAndroidPath returns null for a Z:\
-            // imagefs game, so internal games fall through to the string match unchanged.
+            // why a game could download but not upload). Both internal (Z:\ imagefs) and off-imagefs
+            // games resolve through this branch; the string match below stays as a fallback.
             val android = runCatching { WinePath.resolveAndroidPath(sc.container, raw) }.getOrNull()
             if (android != null) {
                 val ap = android.absolutePath.replace('\\', '/').trimEnd('/')
