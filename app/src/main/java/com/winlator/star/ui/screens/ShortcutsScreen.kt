@@ -1814,7 +1814,7 @@ fun ShortcutsScreen(vm: ShortcutsViewModel = viewModel()) {
     }
 
     if (confirmExportAllSteam) {
-        val steamShortcuts = shortcuts.filter { isSteamOriginShortcut(it) && steamAppIdOf(it) != 0 }
+        val steamShortcuts = shortcuts.filter { isSteamOriginShortcut(it) && resolveSteamAppId(context, it) != 0 }
         OutlinedAlertDialog(
             onDismissRequest = { confirmExportAllSteam = false },
             title = { Text("Export ${steamShortcuts.size} Steam shortcut${if (steamShortcuts.size == 1) "" else "s"}?") },
@@ -9861,19 +9861,63 @@ private fun addToHomeScreen(context: Context, shortcut: Shortcut) {
 }
 
 /**
- * For a Steam shortcut with a numeric app id, writes the GameNative/Daijisho companion files next to
- * the exported .desktop: `<base>.steam` and (for Daijisho's stock Steam platform) `<base>.steamappid`.
- * Content is the bare numeric app id. Returns true when at least one file was written.
+ * Best-effort Steam app id for a shortcut an export needs one for. Order:
+ *  1. the `steamAppId` extra stamped at creation;
+ *  2. the installed-games DB, matched on the shortcut's install dir (exact path, then folder name)
+ *     — most Steam Library/Download Manager shortcuts are untagged, so this is the common path;
+ *  3. a `steam_appid.txt` the game or an earlier launch left in its exe dir (or that dir's parent);
+ *  4. 0 when nothing resolves.
+ * Never throws: a missing/unopened DB or an unreadable file must not crash the export.
+ */
+private fun resolveSteamAppId(context: Context, shortcut: Shortcut): Int {
+    steamAppIdOf(shortcut).takeIf { it > 0 }?.let { return it }
+
+    val installDir = runCatching { EaSupport.installDirOf(shortcut) }.getOrNull()
+    val installPath = installDir?.let { runCatching { it.canonicalPath.trimEnd('/', '\\') }.getOrNull() }
+    if (installDir != null) {
+        try {
+            val rows = SteamDatabase.getInstance(context).installedGames ?: emptyList()
+            fun rowDir(r: SteamDatabase.GameRow): File? =
+                r.installDir?.takeIf { it.isNotBlank() }?.let { File(it) }
+            rows.firstOrNull { r ->
+                installPath != null && rowDir(r)?.let {
+                    runCatching { it.canonicalPath.trimEnd('/', '\\') == installPath }.getOrDefault(false)
+                } == true
+            }?.appId?.takeIf { it > 0 }?.let { return it }
+            rows.firstOrNull { r -> rowDir(r)?.name.equals(installDir.name, ignoreCase = true) }
+                ?.appId?.takeIf { it > 0 }?.let { return it }
+        } catch (_: Exception) {
+        }
+    }
+
+    val exeDir = runCatching {
+        WinePath.resolveAndroidPath(shortcut.container, shortcut.path)?.parentFile
+    }.getOrNull()
+    for (candidate in listOfNotNull(exeDir, exeDir?.parentFile, installDir).distinct()) {
+        val id = runCatching {
+            File(candidate, "steam_appid.txt").takeIf { it.isFile }?.readText()?.trim()?.toIntOrNull() ?: 0
+        }.getOrDefault(0)
+        if (id > 0) return id
+    }
+    return 0
+}
+
+/**
+ * Writes the GameNative/Daijisho companion files next to the exported .desktop: `<base>.steam` (bare id,
+ * ES-DE) and, for Daijisho's stock Steam platform, `<base>.steamappid` (the `[steamappid] <id>` tag file).
+ * Skips only when no app id resolves (see [resolveSteamAppId]). Returns true when at least one file was written.
  */
 private fun writeSteamCompanions(context: Context, shortcut: Shortcut, dir: File): Boolean {
     if (!isSteamOriginShortcut(shortcut)) return false
-    val appId = steamAppIdOf(shortcut)
+    val appId = resolveSteamAppId(context, shortcut)
     if (appId == 0) return false
     val base = SteamFrontendExport.desktopBaseName(shortcut.file.name)
     var wrote = false
     for (name in SteamFrontendExport.companionNames(base)) {
+        val body = if (name.endsWith(".steamappid")) SteamFrontendExport.steamAppIdFileContent(appId)
+        else appId.toString()
         try {
-            FileWriter(File(dir, name), false).use { it.write(appId.toString()) }
+            FileWriter(File(dir, name), false).use { it.write(body) }
             wrote = true
         } catch (_: IOException) {
             Toast.makeText(context, "Failed to write $name", Toast.LENGTH_SHORT).show()

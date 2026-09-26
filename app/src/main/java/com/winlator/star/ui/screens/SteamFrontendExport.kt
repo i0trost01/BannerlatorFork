@@ -12,4 +12,10 @@ object SteamFrontendExport {
     fun companionNames(base: String): List<String> = listOf("$base.steam", "$base.steamappid")
 
     fun boxArtName(base: String): String = "$base.png"
+
+    /**
+     * Body of the `.steamappid` file. Daijisho's bundled Steam platform reads it as a TAG FILE, not a
+     * bare id: the value must be `[steamappid] <id>`. (A bare id in `.steam` is ES-DE's convention.)
+     */
+    fun steamAppIdFileContent(appId: Int): String = "[steamappid] $appId"
 }

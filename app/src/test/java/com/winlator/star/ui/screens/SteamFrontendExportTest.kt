@@ -22,4 +22,8 @@ class SteamFrontendExportTest {
     @Test fun boxArtNameIsPng() {
         assertEquals("Hades.png", SteamFrontendExport.boxArtName("Hades"))
     }
+
+    @Test fun steamAppIdFileContentIsDaijishoTag() {
+        assertEquals("[steamappid] 620", SteamFrontendExport.steamAppIdFileContent(620))
+    }
 }
