@@ -693,12 +693,13 @@ private fun Modifier.drawerNavCell(
     col: Int,
     colCount: Int,
     accent: Color,
+    shapeKey: Int = 0,
     onActivate: () -> Unit = {},
 ): Modifier {
     val highlighted = DrawerNavBridge.level == DrawerNavModel.LEVEL_PANEL &&
         DrawerNavBridge.panelRow == row && DrawerNavBridge.panelCol == col
     val signal = DrawerNavBridge.activateSignal
-    LaunchedEffect(row, colCount) {
+    LaunchedEffect(row, colCount, shapeKey) {
         if (row + 1 > DrawerNavBridge.panelRowCount) DrawerNavBridge.panelRowCount = row + 1
         if (colCount > DrawerNavBridge.panelColCount) DrawerNavBridge.panelColCount = colCount
     }
@@ -3771,7 +3772,7 @@ private fun ControlsContent(state: XServerDrawerState) {
         DrawerNavBridge.panelRowCount = 0
         DrawerNavBridge.panelColCount = 0
     }
-    Box(modifier = Modifier.drawerNavCell(row = 0, col = 0, colCount = 1, accent = accent, onActivate = {
+    Box(modifier = Modifier.drawerNavCell(row = 0, col = 0, colCount = 1, accent = accent, shapeKey = subTab, onActivate = {
         state.setControlsSubTab((subTab + 1) % 6)
     })) {
         ModeChipGrid(
@@ -3810,7 +3811,7 @@ private fun ControlsContent(state: XServerDrawerState) {
                     label = { Text("Profile", color = MaterialTheme.colorScheme.onSurfaceVariant) },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = dropdownExpanded) },
                     modifier = Modifier.fillMaxWidth().menuAnchor()
-                        .drawerNavCell(row = 1, col = 0, colCount = 1, accent = accent) { dropdownExpanded = true },
+                        .drawerNavCell(row = 1, col = 0, colCount = 1, accent = accent, shapeKey = subTab) { dropdownExpanded = true },
                     singleLine = true,
                 )
                 ExposedDropdownMenu(expanded = dropdownExpanded, onDismissRequest = { dropdownExpanded = false }) {
@@ -3953,7 +3954,7 @@ private fun ControlsContent(state: XServerDrawerState) {
             // rumble target, intensity, and per-slot rows below, which are moot while it's off). Persists
             // globally.
             val vibrationMasterOn by XServerDialogState.vibrationMasterEnabled.collectAsState()
-            Box(modifier = Modifier.drawerNavCell(row = 1, col = 0, colCount = 1, accent = accent, onActivate = {
+            Box(modifier = Modifier.drawerNavCell(row = 1, col = 0, colCount = 1, accent = accent, shapeKey = subTab, onActivate = {
                 XServerDialogState.setVibrationMasterEnabled(!vibrationMasterOn)
                 XServerDialogState.onVibrationMasterChanged?.invoke(!vibrationMasterOn)
             })) {

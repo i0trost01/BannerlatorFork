@@ -107,4 +107,10 @@ public class DrawerRegressionGuardTest {
         assertTrue("the panel must report its row count", src.contains("panelRowCount"));
         assertTrue("the panel must report its column count", src.contains("panelColCount"));
     }
+
+    @Test public void controllerBackClosesAnOpenDrawer() throws Exception {
+        String src = activitySource();
+        assertTrue("an open drawer must close on controller Back (N5)",
+                src.contains("drawerOpen && kc == KeyEvent.KEYCODE_BACK"));
+    }
 }

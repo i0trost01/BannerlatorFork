@@ -12937,6 +12937,13 @@ public class XServerDisplayActivity extends AppCompatActivity {
         DrawerController.DrawerMenuAction action = DrawerController.menuActionAtLevel(
                 kc, down, drawerOpen, inGameControlsEditor != null, level);
         if (action == DrawerController.DrawerMenuAction.PASS_THROUGH) return false;
+        // A controller Back while the drawer is open closes it. Back-while-closed is deliberately
+        // NOT handled here: that returns PASS_THROUGH above and reaches the framework dispatcher,
+        // which is what opens the drawer.
+        if (drawerOpen && kc == KeyEvent.KEYCODE_BACK) {
+            if (down) drawerLayout.closeDrawers();
+            return true;
+        }
         if (action == DrawerController.DrawerMenuAction.CLOSE_DRAWER) {
             drawerLayout.closeDrawers();
             return true;
