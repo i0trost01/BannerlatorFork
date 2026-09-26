@@ -187,7 +187,60 @@ git commit -m "refactor(input): mirror WinNative dispatchKeyEvent (handleControl
 
 ---
 
-### Task 3: Verify CI is green and cut a signed release
+### Task 3: Remove every remaining Back/B/gamepad key log and diagnostic
+
+Task 1 deleted the on-screen diagnostic (`GamepadKeyDiag` + the drawer readout) and Task 2 deleted the `WinInput` `Log.i` + high-contrast toast inside `dispatchKeyEvent`. This task is the explicit sweep that guarantees *no* Back/B/gamepad key logging or diagnostic UI survives anywhere in the app — including the dangling `GamepadKeyDiag.INSTANCE.record(...)` call that Task 1 left in `XServerDisplayActivity` (Task 2 should have removed it; this task verifies it and removes it if not) and the temporary `FrontendLaunch` debug logs added while chasing the front-end launch bug.
+
+**Files:**
+- Modify: `app/src/main/java/com/winlator/star/XServerDisplayActivity.java` (dangling `GamepadKeyDiag` call ~:12873)
+- Modify: `app/src/main/java/com/winlator/star/MainActivity.kt` (`FrontendLaunch` debug logs in `maybeForwardFrontendLaunch`)
+
+**Interfaces:**
+- Consumes: the committed state of Tasks 1-2.
+- Produces: no new names. (Removal only.)
+
+- [ ] **Step 1: Confirm the dangling `GamepadKeyDiag` call is gone**
+
+Run: `rg -n "GamepadKeyDiag" app/src/main`
+Expected: no output (empty). If `XServerDisplayActivity.java:12873` still calls `GamepadKeyDiag.INSTANCE.record(...)`, delete that statement (it is inside the temporary `WinInput` diagnostic block that Task 2 removes; if Task 2's block removal already covered it, this passes). Removing it unconditionally is safe — the class is deleted.
+
+- [ ] **Step 2: Remove the `FrontendLaunch` debug logs**
+
+The front-end-launcher investigation added two debug logs that were only for diagnosing the launch bug. Remove them from `MainActivity.kt`:
+
+```kotlin
+        android.util.Log.d("FrontendLaunch", "incoming: action=$action data=${src.dataString}"
+                + " extras=[${src.extras?.keySet()?.joinToString(", ") { "$it=${src.extras!!.get(it)}" } ?: "none"}]")
+```
+
+and
+
+```kotlin
+        android.util.Log.d("FrontendLaunch", "forwarding to session: shortcut_path=$shortcutPath container=$containerId")
+```
+
+Leave any remaining `Log` calls on other tags (e.g. `BH_REALSTEAM`, `CompositorDriver`) untouched — only these two go.
+
+- [ ] **Step 3: Sweep for any other Back/B/gamepad key logging**
+
+Run: `rg -n -i "log\.[diwev]\(.*(back|gamepad|keydiag|wininput)" app/src/main`
+Expected: no output (empty). If any hit appears, it is a leftover key diagnostic — delete it and note it in the report.
+
+- [ ] **Step 4: Confirm no diagnostic UI remains**
+
+Run: `rg -n -i "gamepad keys|keydiag|wininput" app/src/main`
+Expected: no output (empty).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add app/src/main/java/com/winlator/star/XServerDisplayActivity.java app/src/main/java/com/winlator/star/MainActivity.kt
+git commit -m "chore(diag): remove all Back/B gamepad key logs and diagnostics"
+```
+
+---
+
+### Task 4: Verify CI is green and cut a signed release
 
 Compilation and the JVM test suite only run in CI. Confirm the branch builds, then publish a signed standard APK for Obtainium and hand it to the user for the on-device check.
 
@@ -249,7 +302,8 @@ Do not mark this task complete until the user confirms 1-5. If any fails, captur
 - "B works as a regular button when playing" → same fall-through. ✅
 - "B can close the panel" → `handleControllerMenuKey` `KEYCODE_BUTTON_B` close branch. ✅
 - "Drop the Mode hold opener entirely; mimic WinNative fully" → Task 2 Step 1 and Step 3. ✅
-- "Remove shipped diagnostics" → Task 1 (GamepadKeyDiag + AdvancedContent readout) and Task 2 Step 2 (`WinInput`). ✅
+- "Remove shipped diagnostics" → Task 1 (GamepadKeyDiag + AdvancedContent readout), Task 2 Step 2 (`WinInput`), and **Task 3 (explicit sweep: dangling `GamepadKeyDiag` call, the two `FrontendLaunch` debug logs, and any other Back/B/`gamepad` key log or diagnostic UI).** ✅
+- User request "add a task to remove the Back and B button logs" → **Task 3**. ✅
 
 **Placeholder scan:** No TBD/TODO; every code step shows the literal content to write or delete. ✅
 
