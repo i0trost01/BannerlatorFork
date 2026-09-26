@@ -4426,6 +4426,16 @@ private fun AdvancedContent(state: XServerDrawerState) {
     AdvancedActionRow("Debug Logs", R.drawable.icon_debug) {
         state.onClose?.run(); state.onLogs?.run()
     }
+    // TEMPORARY diagnostic readout (see GamepadKeyDiag) — the last gamepad buttons' key/scan codes,
+    // so the Back-vs-B mapping can be read in-app when a toast is unreadable over the game surface.
+    val keyDiag by GamepadKeyDiag.entries
+    if (keyDiag.isNotEmpty()) {
+        Spacer(Modifier.height(10.dp))
+        SectionHeader("Gamepad keys (debug)")
+        keyDiag.forEach { line ->
+            Text(line, color = LocalAccentDim.current, fontSize = 12.sp)
+        }
+    }
     AdvancedActionRow("Picture-in-Picture", R.drawable.ic_picture_in_picture_alt) {
         state.onClose?.run(); state.onPipMode?.run()
     }

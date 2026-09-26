@@ -12826,6 +12826,8 @@ public class XServerDisplayActivity extends AppCompatActivity {
                     && (dkc == KeyEvent.KEYCODE_BACK || dkc == KeyEvent.KEYCODE_BUTTON_MODE
                         || dkc == KeyEvent.KEYCODE_HOME || dkc == KeyEvent.KEYCODE_BUTTON_SELECT
                         || dkc == KeyEvent.KEYCODE_BUTTON_B)) {
+                com.winlator.star.ui.GamepadKeyDiag.INSTANCE.record(
+                        "kc=" + dkc + " scan=" + event.getScanCode() + " " + KeyEvent.keyCodeToString(dkc));
                 // Custom, high-contrast toast — the default one renders dark-on-dark over the game.
                 android.widget.TextView tv = new android.widget.TextView(this);
                 tv.setText("kc=" + dkc + "  scan=" + event.getScanCode() + "  " + KeyEvent.keyCodeToString(dkc));
