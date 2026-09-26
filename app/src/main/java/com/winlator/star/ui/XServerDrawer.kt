@@ -702,8 +702,12 @@ private fun Modifier.drawerNavCell(
         if (row + 1 > DrawerNavBridge.panelRowCount) DrawerNavBridge.panelRowCount = row + 1
         if (colCount > DrawerNavBridge.panelColCount) DrawerNavBridge.panelColCount = colCount
     }
+    var lastSignal by remember { mutableIntStateOf(signal) }
     LaunchedEffect(signal) {
-        if (signal != 0 && highlighted) onActivate()
+        if (signal != lastSignal) {
+            lastSignal = signal
+            if (highlighted) onActivate()
+        }
     }
     return this.then(
         if (highlighted) Modifier.border(2.dp, accent, RoundedCornerShape(10.dp)) else Modifier
@@ -3763,7 +3767,13 @@ private fun ControlsContent(state: XServerDrawerState) {
     // exactly one renders at a time. ModeChipGrid is already the drawer's segmented-control language
     // (equal-width accent-filled chips), so the bar reads as native here instead of a new widget.
     val subTab by state.controlsSubTab.collectAsState()
-    Box(modifier = Modifier.drawerNavCell(row = 0, col = 0, colCount = 1, accent = accent)) {
+    LaunchedEffect(subTab) {
+        DrawerNavBridge.panelRowCount = 0
+        DrawerNavBridge.panelColCount = 0
+    }
+    Box(modifier = Modifier.drawerNavCell(row = 0, col = 0, colCount = 1, accent = accent, onActivate = {
+        state.setControlsSubTab((subTab + 1) % 6)
+    })) {
         ModeChipGrid(
             listOf(
                 Triple("Touch", subTab == 0) { state.setControlsSubTab(0) },
