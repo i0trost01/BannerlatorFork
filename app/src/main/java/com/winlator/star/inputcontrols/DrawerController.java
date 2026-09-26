@@ -11,7 +11,7 @@ public final class DrawerController {
     public static final int KEYCODE_BUTTON_B = 97;
 
     public enum DrawerBackAction { OPEN, CLOSE, NONE }
-    public enum DrawerMenuAction { CLOSE_DRAWER, ROUTE_TO_DRAWER, PASS_THROUGH }
+    public enum DrawerMenuAction { CLOSE_DRAWER, ROUTE_TO_DRAWER, PASS_THROUGH, PANEL_TO_RAIL }
 
     private DrawerController() {}
 
@@ -25,8 +25,14 @@ public final class DrawerController {
     }
 
     public static DrawerMenuAction menuAction(int keyCode, boolean down, boolean drawerOpen, boolean editorActive) {
+        return menuActionAtLevel(keyCode, down, drawerOpen, editorActive, DrawerNavModel.LEVEL_RAIL);
+    }
+
+    public static DrawerMenuAction menuActionAtLevel(int keyCode, boolean down, boolean drawerOpen,
+                                                     boolean editorActive, int level) {
         if (editorActive || !drawerOpen) return DrawerMenuAction.PASS_THROUGH;
         if (isDrawerButton(keyCode)) {
+            if (down && level == DrawerNavModel.LEVEL_PANEL) return DrawerMenuAction.PANEL_TO_RAIL;
             return down ? DrawerMenuAction.CLOSE_DRAWER : DrawerMenuAction.ROUTE_TO_DRAWER;
         }
         return DrawerMenuAction.ROUTE_TO_DRAWER;

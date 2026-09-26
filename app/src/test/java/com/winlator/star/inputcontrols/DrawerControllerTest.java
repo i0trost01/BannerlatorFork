@@ -76,4 +76,25 @@ public class DrawerControllerTest {
         assertFalse(DrawerController.isDrawerButton(BUTTON_A));
         assertFalse(DrawerController.isDrawerButton(DPAD_LEFT));
     }
+
+    @Test public void bFromTheRailStillCloses() {
+        assertEquals(DrawerController.DrawerMenuAction.CLOSE_DRAWER,
+                DrawerController.menuActionAtLevel(BUTTON_B, true, true, false,
+                        DrawerNavModel.LEVEL_RAIL));
+    }
+
+    @Test public void bFromThePanelStepsBackToTheRail() {
+        assertEquals(DrawerController.DrawerMenuAction.PANEL_TO_RAIL,
+                DrawerController.menuActionAtLevel(BUTTON_B, true, true, false,
+                        DrawerNavModel.LEVEL_PANEL));
+    }
+
+    @Test public void bNeverOpensEvenWithALevel() {
+        assertEquals(DrawerController.DrawerMenuAction.PASS_THROUGH,
+                DrawerController.menuActionAtLevel(BUTTON_B, true, false, false,
+                        DrawerNavModel.LEVEL_RAIL));
+        assertEquals(DrawerController.DrawerMenuAction.PASS_THROUGH,
+                DrawerController.menuActionAtLevel(BUTTON_B, true, false, false,
+                        DrawerNavModel.LEVEL_PANEL));
+    }
 }
