@@ -104,6 +104,7 @@ import com.winlator.star.core.Callback;
 import com.winlator.star.core.WineThemeManager;
 import com.winlator.star.core.WineUtils;
 import com.winlator.star.inputcontrols.ControlsProfile;
+import com.winlator.star.inputcontrols.DrawerController;
 import com.winlator.star.inputcontrols.ExternalController;
 import com.winlator.star.inputcontrols.InputControlsManager;
 import com.winlator.star.inputcontrols.SteamControllerBackend;
@@ -7196,15 +7197,15 @@ public class XServerDisplayActivity extends AppCompatActivity {
             closeInGameControlsEditor();
             return true;
         }
-        if (environment != null) {
-            if (!drawerLayout.isDrawerOpen(GravityCompat.START)) {
-                drawerLayout.openDrawer(GravityCompat.START);
-            } else {
-                drawerLayout.closeDrawers();
-            }
-            return true;
+        if (environment == null || drawerLayout == null) return false;
+        DrawerController.DrawerBackAction action = DrawerController.backAction(
+                drawerLayout.isDrawerOpen(GravityCompat.START), false);
+        if (action == DrawerController.DrawerBackAction.OPEN) {
+            drawerLayout.openDrawer(GravityCompat.START);
+        } else if (action == DrawerController.DrawerBackAction.CLOSE) {
+            drawerLayout.closeDrawers();
         }
-        return false;
+        return true;
     }
 
     private void openXServerDrawer() {
@@ -12933,10 +12934,12 @@ public class XServerDisplayActivity extends AppCompatActivity {
      * OnBackPressedDispatcher (see the addCallback in setupUI). Returns true when it consumed the event.
      */
     private boolean handleControllerMenuKey(int kc, boolean down) {
-        if (drawerLayout == null || environment == null || inGameControlsEditor != null) return false;
-        if (!drawerLayout.isDrawerOpen(GravityCompat.START)) return false;
-        if (kc == KeyEvent.KEYCODE_BUTTON_B) {
-            if (down) drawerLayout.closeDrawers();
+        if (drawerLayout == null || environment == null) return false;
+        DrawerController.DrawerMenuAction action = DrawerController.menuAction(
+                kc, down, drawerLayout.isDrawerOpen(GravityCompat.START), inGameControlsEditor != null);
+        if (action == DrawerController.DrawerMenuAction.PASS_THROUGH) return false;
+        if (action == DrawerController.DrawerMenuAction.CLOSE_DRAWER) {
+            drawerLayout.closeDrawers();
             return true;
         }
         if (down) {
