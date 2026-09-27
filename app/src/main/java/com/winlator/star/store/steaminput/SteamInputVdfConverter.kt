@@ -116,9 +116,9 @@ object SteamInputVdfConverter {
     ) {
         val list = bindings.getOrPut(actionName) { mutableListOf() }
         val bindingWithSuffix = "$binding=$bindingSuffix"
-        if (!list.contains(binding) && !list.contains(bindingWithSuffix)) {
-            if (list.isEmpty()) list.add(bindingWithSuffix) else list.add(0, binding)
-        }
+        // An analog action (stick/trigger) takes exactly ONE analog binding; ignore later ones (e.g.
+        // a dpad group also mapped to the same stick action) so the line stays valid gbe_fork syntax.
+        if (list.isEmpty()) list.add(bindingWithSuffix)
     }
 
     private fun buildPresetBindings(

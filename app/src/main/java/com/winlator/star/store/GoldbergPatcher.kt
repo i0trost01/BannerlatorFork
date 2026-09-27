@@ -403,14 +403,17 @@ object GoldbergPatcher {
             val dirs = targets.map { it.dir }.distinct()
             if (dirs.isEmpty()) return
             SteamPrefs.init(context.applicationContext)
-            if (SteamPrefs.getUseSteamInput(appId)) {
-                val vdf = SteamInputLayouts.resolve(context.applicationContext, dirs.first())
+            // A game that ships its own Steam Input action manifest hands input to Steam Input, so it
+            // needs the action-set files even when the user has not flipped the per-game toggle.
+            val declared = dirs.any { SteamInputLayouts.hasOwnManifest(it) }
+            if (SteamPrefs.getUseSteamInput(appId) || declared) {
+                val vdf = SteamInputLayouts.resolve(context.applicationContext, dirs.first(), appId)
                 if (vdf.isNullOrEmpty()) {
                     Log.w(TAG, "steam input: no layout for appId $appId")
                 } else {
                     var n = 0
                     for (dir in dirs) n += SteamInputConfigWriter.write(dir, vdf)
-                    Log.i(TAG, "steam input: wrote $n action-set file(s) for appId $appId")
+                    Log.i(TAG, "steam input: wrote $n action-set file(s) for appId $appId (declared=$declared)")
                 }
             } else {
                 for (dir in dirs) SteamInputConfigWriter.clear(dir)
