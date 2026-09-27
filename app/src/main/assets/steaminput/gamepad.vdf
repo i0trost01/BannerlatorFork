@@ -1,0 +1,59 @@
+"controller_mappings"
+{
+	"actions"
+	{
+		"Default"
+		{
+		}
+	}
+	"group"
+	{
+		"id" "diamond"
+		"mode" "button_diamond"
+		"inputs"
+		{
+			"button_a" { "activators" { "Full_Press" { "bindings" { "binding" "xinput_button A" } } } }
+			"button_b" { "activators" { "Full_Press" { "bindings" { "binding" "xinput_button B" } } } }
+			"button_x" { "activators" { "Full_Press" { "bindings" { "binding" "xinput_button X" } } } }
+			"button_y" { "activators" { "Full_Press" { "bindings" { "binding" "xinput_button Y" } } } }
+			"left_bumper" { "activators" { "Full_Press" { "bindings" { "binding" "xinput_button LBUMPER" } } } }
+			"right_bumper" { "activators" { "Full_Press" { "bindings" { "binding" "xinput_button RBUMPER" } } } }
+			"button_menu" { "activators" { "Full_Press" { "bindings" { "binding" "xinput_button START" } } } }
+			"button_escape" { "activators" { "Full_Press" { "bindings" { "binding" "xinput_button BACK" } } } }
+			"dpad_north" { "activators" { "Full_Press" { "bindings" { "binding" "xinput_button DUP" } } } }
+			"dpad_south" { "activators" { "Full_Press" { "bindings" { "binding" "xinput_button DDOWN" } } } }
+			"dpad_west" { "activators" { "Full_Press" { "bindings" { "binding" "xinput_button DLEFT" } } } }
+			"dpad_east" { "activators" { "Full_Press" { "bindings" { "binding" "xinput_button DRIGHT" } } } }
+		}
+	}
+	"group"
+	{
+		"id" "lstick"
+		"mode" "joystick_move"
+		"gameactions" { "Default" "LJOY" }
+		"inputs"
+		{
+			"joystick" { "activators" { "Full_Press" { "bindings" { "binding" "xinput_button LSTICK" } } } }
+		}
+	}
+	"group"
+	{
+		"id" "rstick"
+		"mode" "joystick_move"
+		"gameactions" { "Default" "RJOY" }
+		"inputs"
+		{
+			"right_joystick" { "activators" { "Full_Press" { "bindings" { "binding" "xinput_button RSTICK" } } } }
+		}
+	}
+	"preset"
+	{
+		"name" "Default"
+		"group_source_bindings"
+		{
+			"diamond" "button_diamond active"
+			"lstick" "joystick active"
+			"rstick" "right_joystick active"
+		}
+	}
+}
