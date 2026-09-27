@@ -156,6 +156,8 @@ object GoldbergPatcher {
         // no harm before a restore).
         sharedPrep(context, targets, appId)
 
+        applySteamInput(context, appId, installDir)
+
         // GOLDEN RULE: always restore pristine dlls from .bak first, so switching
         // tiers never stacks Goldberg dlls on top of each other.
         restoreDlls(targets)
@@ -387,6 +389,30 @@ object GoldbergPatcher {
         } catch (e: Exception) {
             Log.w(TAG, "scanInterfaces failed for ${dll.name}", e)
             emptyList()
+        }
+    }
+
+    /**
+     * Writes or clears the gbe_fork Steam Input action-set files for this game based on the
+     * per-game preference. Best-effort: never throws into the launch path.
+     */
+    private fun applySteamInput(context: Context, appId: Int, installDir: String) {
+        try {
+            val dir = File(installDir)
+            SteamPrefs.init(context.applicationContext)
+            if (SteamPrefs.getUseSteamInput(appId)) {
+                val vdf = SteamInputLayouts.resolve(context.applicationContext, dir)
+                if (vdf.isNullOrEmpty()) {
+                    Log.w(TAG, "steam input: no layout for appId $appId")
+                } else {
+                    val n = com.winlator.star.store.steaminput.SteamInputConfigWriter.write(dir, vdf)
+                    Log.i(TAG, "steam input: wrote $n action-set file(s) for appId $appId")
+                }
+            } else {
+                com.winlator.star.store.steaminput.SteamInputConfigWriter.clear(dir)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "steam input apply failed for appId $appId", e)
         }
     }
 
