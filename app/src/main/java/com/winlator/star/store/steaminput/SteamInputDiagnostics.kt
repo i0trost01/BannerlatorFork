@@ -135,4 +135,80 @@ object SteamInputDiagnostics {
         }
         return hits
     }
+
+    // ── RealSteam (genuine-Steam) Steam Input ─────────────────────────────────────────────────────
+
+    /**
+     * RealSteam Steam Input diagnostics, surfaced in the in-game Debug panel and logcat under [TAG].
+     * Reads the ACTUAL staged state, so call it AFTER [com.winlator.star.store.RealSteamLauncher.prepare]
+     * (the launch-time hook runs before prepare writes anything): whether Steam Input is on for this app
+     * (toggle or own manifest), the game's own manifest, the staged host layout, the genuine client's
+     * localconfig Steam Input keys, and the agent env flag. Never throws.
+     */
+    fun reportRealSteam(
+        context: Context,
+        driveC: File?,
+        appId: Int,
+        installDir: File?,
+        agentEnv: Map<String, String>?,
+    ): List<String> {
+        val out = ArrayList<String>()
+        try {
+            SteamPrefs.init(context.applicationContext)
+            val toggle = SteamPrefs.getUseSteamInput(appId)
+            val declared = installDir?.let { SteamInputLayouts.hasOwnManifest(it) } ?: false
+            out += "===== STEAM INPUT DIAG / RealSteam (appId=$appId) ====="
+            out += "steamInputEnabled=${toggle || declared}  (toggle=$toggle, ownManifest=$declared)"
+            out += "agent BL_AGENT_STEAMINPUT=${agentEnv?.get("BL_AGENT_STEAMINPUT") ?: "(absent)"}"
+            out += "installDir=${installDir?.absolutePath ?: "UNRESOLVED"}"
+            val manifest = installDir?.let { SteamInputLayouts.findManifest(it) }
+            out += "own manifest=${manifest?.absolutePath ?: "(none)"}"
+
+            val steamDir = driveC?.let { File(it, "Program Files (x86)/Steam") }
+            if (steamDir == null || !steamDir.isDirectory) {
+                out += "prefix Steam dir: MISSING (${steamDir?.absolutePath ?: "driveC null"})"
+                out += "===== END STEAM INPUT DIAG ====="
+                return log(out)
+            }
+            val layout = File(steamDir, "steamhost_controller_$appId.vdf")
+            out += "staged ${layout.name}=" +
+                (if (layout.isFile) "OK (${layout.length()} bytes)" else "MISSING")
+
+            val localConfigs = findLocalConfigs(steamDir)
+            if (localConfigs.isEmpty()) {
+                out += "localconfig.vdf: NONE under ${steamDir.absolutePath}/userdata"
+            } else {
+                for (lc in localConfigs) {
+                    out += "----- ${lc.absolutePath} -----"
+                    out += localConfigSteamInputLines(runCatching { lc.readText() }.getOrDefault(""), appId)
+                }
+            }
+            out += "===== END STEAM INPUT DIAG ====="
+        } catch (t: Throwable) {
+            out += "steam-input RealSteam diag failed: $t"
+        }
+        return log(out)
+    }
+
+    private fun findLocalConfigs(steamDir: File): List<File> {
+        val users = File(steamDir, "userdata").listFiles() ?: return emptyList()
+        return users.mapNotNull { File(it, "config/localconfig.vdf").takeIf { f -> f.isFile } }
+    }
+
+    /** Just the Steam Input lines: the support keys and the per-app UseSteamControllerConfig. */
+    internal fun localConfigSteamInputLines(content: String, appId: Int): List<String> {
+        val keys = listOf(
+            "SteamController_XBoxSupport", "SteamController_GenericGamepadSupport",
+            "SteamController_PSSupport", "SteamController_SwitchSupport",
+            "UseSteamControllerConfig",
+        )
+        val out = ArrayList<String>()
+        for (raw in content.lines()) {
+            val t = raw.trim()
+            if (keys.any { t.startsWith("\"$it\"") }) out += "  $t"
+        }
+        if (out.isEmpty()) out += "  (no Steam Input keys found)"
+        out += "  has apps/$appId block=${content.contains("\"$appId\"")}"
+        return out
+    }
 }

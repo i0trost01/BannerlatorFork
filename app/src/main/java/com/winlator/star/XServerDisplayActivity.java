@@ -5916,6 +5916,24 @@ public class XServerDisplayActivity extends AppCompatActivity {
                     row != null ? row.installDir : null,
                     realSteamEaChain);
 
+            // Steam Input diagnostics for the RealSteam path (temporary): the launch-time hook ran
+            // BEFORE prepare() staged anything, so report the ACTUAL staged state here instead — the
+            // in-game Debug panel is how a device user (no logcat) reads it. Off the main thread.
+            try {
+                final File siDriveC = realSteamDriveC;
+                final File siInstall = new File(ref.installDir);
+                final int siAppId = ref.appId;
+                final java.util.Map<String, String> siEnv = realSteamPlan != null ? realSteamPlan.env : null;
+                new Thread(() -> {
+                    try {
+                        java.util.List<String> siLines =
+                                com.winlator.star.store.steaminput.SteamInputDiagnostics.INSTANCE
+                                        .reportRealSteam(getApplicationContext(), siDriveC, siAppId, siInstall, siEnv);
+                        runOnUiThread(() -> { for (String l : siLines) XServerDialogState.INSTANCE.appendLog(l); });
+                    } catch (Throwable ignored) {}
+                }, "steam-input-diag-rs").start();
+            } catch (Throwable ignored) {}
+
             if (realSteamPlan != null) {
                 Log.i("BH_REALSTEAM", "RealSteam launch armed (appId=" + realSteamPlan.appId
                         + ", steamapps\\common\\" + realSteamPlan.canonicalName
