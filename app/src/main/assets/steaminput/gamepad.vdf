@@ -18,8 +18,8 @@
 			"button_y" { "activators" { "Full_Press" { "bindings" { "binding" "xinput_button Y" } } } }
 			"left_bumper" { "activators" { "Full_Press" { "bindings" { "binding" "xinput_button LBUMPER" } } } }
 			"right_bumper" { "activators" { "Full_Press" { "bindings" { "binding" "xinput_button RBUMPER" } } } }
-			"button_menu" { "activators" { "Full_Press" { "bindings" { "binding" "xinput_button START" } } } }
-			"button_escape" { "activators" { "Full_Press" { "bindings" { "binding" "xinput_button BACK" } } } }
+			"button_menu" { "activators" { "Full_Press" { "bindings" { "binding" "xinput_button BACK" } } } }
+			"button_escape" { "activators" { "Full_Press" { "bindings" { "binding" "xinput_button START" } } } }
 			"dpad_north" { "activators" { "Full_Press" { "bindings" { "binding" "xinput_button DUP" } } } }
 			"dpad_south" { "activators" { "Full_Press" { "bindings" { "binding" "xinput_button DDOWN" } } } }
 			"dpad_west" { "activators" { "Full_Press" { "bindings" { "binding" "xinput_button DLEFT" } } } }
