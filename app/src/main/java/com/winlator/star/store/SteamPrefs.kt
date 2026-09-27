@@ -256,17 +256,18 @@ object SteamPrefs {
     // absence of the key — we NEVER persist an unknown, so it can always be retried later.
 
     private const val K_CLOUD_SUPPORT_PREFIX = "cloud_support_"
-    private const val K_CLOUD_SUPPORT_EPOCH = "cloud_support_epoch"
+    private const val K_CLOUD_SUPPORT_EPOCH_PREFIX = "cloud_support_epoch_"
 
     /** Bump when the cloud-support heuristic changes, to invalidate verdicts cached by older logic. */
     private const val CLOUD_SUPPORT_EPOCH = 2
 
     /** Cached Steam-Cloud-support verdict for [appId]: true/false if resolved before, null if never.
-     *  A verdict written by an older heuristic (epoch below [CLOUD_SUPPORT_EPOCH]) is treated as
-     *  absent, so the caller re-resolves it. */
+     *  The epoch is recorded PER APP, so a verdict written for [appId] by an older heuristic (its
+     *  per-app epoch below [CLOUD_SUPPORT_EPOCH]) is treated as absent and the caller re-resolves it,
+     *  independently of every other app's cache. */
     fun getCloudSupportCached(ctx: Context, appId: Int): Boolean? {
         init(ctx)
-        if (prefs.getInt(K_CLOUD_SUPPORT_EPOCH, 0) < CLOUD_SUPPORT_EPOCH) return null
+        if (prefs.getInt(K_CLOUD_SUPPORT_EPOCH_PREFIX + appId, 0) < CLOUD_SUPPORT_EPOCH) return null
         val key = K_CLOUD_SUPPORT_PREFIX + appId
         if (!prefs.contains(key)) return null
         return prefs.getBoolean(key, false)
@@ -277,7 +278,7 @@ object SteamPrefs {
         init(ctx)
         prefs.edit()
             .putBoolean(K_CLOUD_SUPPORT_PREFIX + appId, v)
-            .putInt(K_CLOUD_SUPPORT_EPOCH, CLOUD_SUPPORT_EPOCH)
+            .putInt(K_CLOUD_SUPPORT_EPOCH_PREFIX + appId, CLOUD_SUPPORT_EPOCH)
             .apply()
     }
 

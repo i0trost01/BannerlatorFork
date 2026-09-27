@@ -39,8 +39,10 @@ public class CloudSupportEpochGuardTest {
     @Test
     public void epochKeyAndConstantExist() throws IOException {
         String src = readRepoFile("src", "main", "java", "com", "winlator", "star", "store", "SteamPrefs.kt");
-        assertTrue("must define a cloud-support epoch key", src.contains("cloud_support_epoch"));
-        assertTrue("must define a current epoch constant", src.contains("CLOUD_SUPPORT_EPOCH"));
+        assertTrue("must define a per-app cloud-support epoch key prefix",
+                src.contains("cloud_support_epoch_"));
+        assertTrue("must define the current epoch constant", src.contains("CLOUD_SUPPORT_EPOCH"));
+        assertTrue("must declare the current epoch value", src.contains("CLOUD_SUPPORT_EPOCH = 2"));
     }
 
     @Test
@@ -53,6 +55,8 @@ public class CloudSupportEpochGuardTest {
         String getBody = src.substring(get, end);
         assertTrue("getCloudSupportCached must read the stored epoch and return null when stale",
                 getBody.contains("CLOUD_SUPPORT_EPOCH") && getBody.contains("return null"));
+        assertTrue("getCloudSupportCached must read a PER-APP epoch key, not a global one",
+                getBody.contains("cloud_support_epoch_") || getBody.contains("K_CLOUD_SUPPORT_EPOCH_PREFIX"));
     }
 
     @Test
@@ -60,8 +64,12 @@ public class CloudSupportEpochGuardTest {
         String src = readRepoFile("src", "main", "java", "com", "winlator", "star", "store", "SteamPrefs.kt");
         int set = src.indexOf("fun setCloudSupportCached(");
         assertTrue("setCloudSupportCached must exist", set >= 0);
-        String setBody = src.substring(set, Math.min(src.length(), set + 400));
+        int end = src.indexOf('}', src.indexOf(".apply()", set));
+        assertTrue("setCloudSupportCached body must be discoverable", end > set);
+        String setBody = src.substring(set, end);
         assertTrue("setCloudSupportCached must write the current epoch",
                 setBody.contains("CLOUD_SUPPORT_EPOCH"));
+        assertTrue("setCloudSupportCached must stamp a PER-APP epoch key, not a global one",
+                setBody.contains("cloud_support_epoch_") || setBody.contains("K_CLOUD_SUPPORT_EPOCH_PREFIX"));
     }
 }
