@@ -19,6 +19,7 @@ object SteamInputDiagnostics {
     private const val TAG = "BH_STEAM_INPUT"
     private const val GREP_LINES = 200
     private const val RAW_LINES = 1200
+    private const val CLIENT_LOG_TAIL = 50
 
     fun report(context: Context, installDir: File?, appId: Int): List<String> {
         val out = ArrayList<String>()
@@ -191,6 +192,7 @@ object SteamInputDiagnostics {
                     out += localConfigSteamInputLines(runCatching { lc.readText() }.getOrDefault(""), appId)
                 }
             }
+            out += clientControllerSection(steamDir)
             out += "===== END STEAM INPUT DIAG ====="
         } catch (t: Throwable) {
             out += "steam-input RealSteam diag failed: $t"
@@ -213,6 +215,40 @@ object SteamInputDiagnostics {
                 .take(8)
                 .toList()
         }.getOrDefault(emptyList())
+
+    /**
+     * What the genuine Steam client itself says about controllers/Steam Input: its {@code logs/}
+     * inventory plus the tail of any controller/input/launch log, and the Controller lines of
+     * {@code config/config.vdf}. Readable from logcat on a device with no root.
+     */
+    private fun clientControllerSection(steamDir: File): List<String> {
+        val out = ArrayList<String>()
+        val logs = File(steamDir, "logs")
+        val files = logs.listFiles()?.filter { it.isFile }?.sortedBy { it.name } ?: emptyList()
+        out += "client logs/${files.size}: ${files.joinToString(", ") { it.name }}"
+        for (f in files) {
+            val n = f.name.lowercase()
+            if (!(n.contains("controller") || n.contains("input") || n == "gameprocess_log.txt")) continue
+            if (f.length() > 1_000_000) {
+                out += "----- ${f.name} (${f.length()}B) too large to tail -----"
+                continue
+            }
+            out += "----- tail ${f.name} (${f.length()}B) -----"
+            out += runCatching { f.readLines().takeLast(CLIENT_LOG_TAIL) }
+                .getOrDefault(listOf("(unreadable)"))
+        }
+        val config = File(steamDir, "config/config.vdf")
+        if (config.isFile) {
+            val hits = runCatching {
+                config.readLines()
+                    .filter { it.contains("Controller", true) || it.contains("SteamInput", true) }
+                    .takeLast(40)
+            }.getOrDefault(emptyList())
+            out += "----- config.vdf Controller/SteamInput lines (${hits.size}) -----"
+            out += if (hits.isEmpty()) listOf("  (none)") else hits
+        }
+        return out
+    }
 
     /** Just the Steam Input lines: the support keys and the per-app UseSteamControllerConfig. */
     internal fun localConfigSteamInputLines(content: String, appId: Int): List<String> {

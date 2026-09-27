@@ -196,6 +196,14 @@ public final class SteamLiteLogCollector {
             if (FileUtils.writeString(target, finished)) {
                 Log.i(TAG, "wrote " + target.getAbsolutePath() + " (" + steamRedacted.size() + " Steam logs)");
             }
+            // Mirror the bundle where ADB can read it (getExternalFilesDir = Android/data/<pkg>/files),
+            // so a device with no root and a non-debuggable build can still hand the client logs out.
+            try {
+                File ext = context.getExternalFilesDir(null);
+                if (ext != null && (ext.isDirectory() || ext.mkdirs())) {
+                    FileUtils.writeString(new File(ext, OUTPUT_NAME), finished);
+                }
+            } catch (Throwable ignored) {}
         } catch (Throwable t) {
             // Never let log collection break a game exiting.
             Log.w(TAG, "collect failed", t);
