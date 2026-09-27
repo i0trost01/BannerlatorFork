@@ -9,6 +9,7 @@ import com.winlator.star.core.SaveLocator
 import com.winlator.star.core.WinePath
 import `in`.dragonbra.javasteam.types.KeyValue
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -278,7 +279,7 @@ object SteamCloudSaveManager {
                 val allOk = AtomicBoolean(true)
                 // What we actually uploaded and the content we expect to find remotely, for the
                 // post-upload verification below. Concurrent map: the loop runs on a bounded pool.
-                val uploadedShas = java.util.concurrent.ConcurrentHashMap<String, ByteArray>()
+                val uploadedShas = ConcurrentHashMap<String, ByteArray>()
                 runConcurrently(toUpload, "steam-cloud-ul-$appId") { (file, cloudPath) ->
                     try {
                         cb.onStatus("Uploading: ${file.name}")
@@ -306,41 +307,46 @@ object SteamCloudSaveManager {
                     // now report the local file's SHA-1. Mere non-emptiness is NOT enough - a game that
                     // already had a cloud file would otherwise report success while the cloud still held
                     // the OLD save (the reported bug).
+                    // Fetch once; reused for both the per-path verification and the empty-manifest
+                    // no-retention signal (no third round-trip, no transient disagreement).
+                    val remoteShaByPath: Map<String, ByteArray>? = if (uploaded.get() == 0) null else try {
+                        val m = HashMap<String, ByteArray>()
+                        for (f in steamCloud.listFiles(appId)) {
+                            val key = sanitizeRelative(f.remotePath) ?: continue
+                            val sha = f.sha
+                            if (sha.size == SHA1_LEN) m[key] = sha
+                        }
+                        m
+                    } catch (e: Exception) {
+                        Log.w(TAG, "post-upload verification fetch failed for appId=$appId", e)
+                        null
+                    }
+
+                    // `unverified` is derived from `uploaded`, NOT from the bad count, so ANY path that
+                    // wasn't positively verified counts as unverified even if it never made it into
+                    // `uploadedShas` (sanitizeRelative null / sha1 threw). This keeps
+                    // verified + unverified == uploaded.get() always, so onDone is reachable only when
+                    // every uploaded file was positively verified.
                     val verified: Int
                     val unverified: Int
                     if (uploaded.get() == 0) {
                         verified = 0
                         unverified = 0
+                    } else if (remoteShaByPath == null) {
+                        verified = 0
+                        unverified = uploaded.get()
                     } else {
-                        val remoteShaByPath: Map<String, ByteArray>? = try {
-                            val m = HashMap<String, ByteArray>()
-                            for (f in steamCloud.listFiles(appId)) {
-                                val key = sanitizeRelative(f.remotePath) ?: continue
-                                val sha = f.sha
-                                if (sha.size == SHA1_LEN) m[key] = sha
-                            }
-                            m
-                        } catch (e: Exception) {
-                            Log.w(TAG, "post-upload verification fetch failed for appId=$appId", e)
-                            null
+                        var ok = 0
+                        for ((key, sha) in uploadedShas) {
+                            val remote = remoteShaByPath[key]
+                            if (remote != null && remote.contentEquals(sha)) ok++
                         }
-                        if (remoteShaByPath == null) {
-                            verified = 0
-                            unverified = uploaded.get()
-                        } else {
-                            var ok = 0
-                            var bad = 0
-                            for ((key, sha) in uploadedShas) {
-                                val remote = remoteShaByPath[key]
-                                if (remote != null && remote.contentEquals(sha)) ok++ else bad++
-                            }
-                            verified = ok
-                            unverified = bad
-                        }
+                        verified = ok
+                        unverified = uploaded.get() - verified
                     }
 
                     if (uploaded.get() > 0 && verified == 0 && unverified == uploaded.get() &&
-                        runCatching { steamCloud.listFiles(appId).isEmpty() }.getOrDefault(false)) {
+                        remoteShaByPath != null && remoteShaByPath.isEmpty()) {
                         SaveSyncStore.markNoSteamCloud(ctx, appId)
                         cb.onError(NO_RETENTION_MESSAGE)
                     } else if (unverified > 0) {
@@ -456,21 +462,6 @@ object SteamCloudSaveManager {
         return ufs.get("savefiles").children.any { entry ->
             entry.get("root").value.usable() || entry.get("pattern").value.usable() ||
                 entry.get("path").value.usable() || entry.get("addpath").value.usable()
-        }
-    }
-
-    /**
-     * Post-upload retention check. Re-fetches the cloud manifest and reports whether it is COMPLETELY
-     * EMPTY (0 files). Returns true = empty (the just-committed upload was NOT retained → no cloud),
-     * false = non-empty (retained, e.g. HL2), or null if the manifest re-fetch itself failed (⇒ can't
-     * tell → caller keeps the optimistic success and does not mark).
-     */
-    private fun isCloudManifestEmpty(sc: SteamCloudBackend, appId: Int): Boolean? {
-        return try {
-            sc.listFiles(appId).isEmpty()
-        } catch (e: Exception) {
-            Log.w(TAG, "post-upload emptiness check failed for appId=$appId", e)
-            null
         }
     }
 

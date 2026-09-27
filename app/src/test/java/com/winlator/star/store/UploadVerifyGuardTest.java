@@ -1,7 +1,6 @@
 package com.winlator.star.store;
 
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertFalse;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -59,14 +58,16 @@ public class UploadVerifyGuardTest {
         assertTrue("must verify per-path SHA after upload", b.contains("contentEquals"));
         assertTrue("must reuse the manifest sha map for verification", b.contains("sanitizeRelative("));
         assertTrue("must count unverified paths so success is not claimed blindly", b.contains("unverified"));
+        assertTrue("must build the remote-sha map for verification", b.contains("remoteShaByPath"));
+        assertTrue("must count positive verifications", b.contains("verified"));
     }
 
     @Test
     public void uploadCapturesEachUploadedFilesSha() throws IOException {
         String src = readRepoFile("src", "main", "java", "com", "winlator", "star", "store", "SteamCloudSaveManager.kt");
         String b = body(src, "fun uploadSaves(");
-        assertTrue("upload must record the sha of each successfully uploaded file",
-                b.contains("SteamCloudBackend.sha1("));
+        assertTrue("upload must capture each uploaded file's sha INTO the map",
+                b.contains("uploadedShas[key] = SteamCloudBackend.sha1(file)"));
     }
 
     @Test
