@@ -276,11 +276,18 @@ object SteamCloudSaveManager {
                 // the batch begin/complete calls stay single and sequential around this loop.
                 val uploaded = AtomicInteger(0)
                 val allOk = AtomicBoolean(true)
+                // What we actually uploaded and the content we expect to find remotely, for the
+                // post-upload verification below. Concurrent map: the loop runs on a bounded pool.
+                val uploadedShas = java.util.concurrent.ConcurrentHashMap<String, ByteArray>()
                 runConcurrently(toUpload, "steam-cloud-ul-$appId") { (file, cloudPath) ->
                     try {
                         cb.onStatus("Uploading: ${file.name}")
                         if (steamCloud.uploadOne(appId, file, cloudPath, batchId)) {
                             uploaded.incrementAndGet()
+                            runCatching {
+                                val key = sanitizeRelative(cloudPath)
+                                if (key != null) uploadedShas[key] = SteamCloudBackend.sha1(file)
+                            }
                         } else {
                             allOk.set(false)
                         }
@@ -294,18 +301,50 @@ object SteamCloudSaveManager {
                 steamCloud.completeBatch(appId, batchId, allOk.get())
 
                 if (allOk.get()) {
-                    // ── HONESTY GUARD 2: did the cloud actually KEEP the committed files? ──
-                    // We committed N>0 files. Re-fetch the manifest SYNCHRONOUSLY: a COMPLETELY EMPTY
-                    // manifest right after a committed upload is the no-retention signature (old games
-                    // like FlatOut 2 ack the commit but store nothing). This runs regardless of the
-                    // PICS verdict — FlatOut 2 fooled the PICS check by declaring UFS savefiles. It is
-                    // safe vs HL2: a retaining game returns a NON-EMPTY manifest, so it never
-                    // false-triggers. If the re-fetch itself fails we keep the optimistic result (the
-                    // async rebaseline will still correct the pill) and do NOT mark.
-                    val emptyAfterUpload = if (uploaded.get() > 0) isCloudManifestEmpty(steamCloud, appId) else null
-                    if (emptyAfterUpload == true) {
-                        SaveSyncStore.markNoSteamCloud(ctx, appId)   // remember → short-circuit next time
-                        cb.onError(NO_RETENTION_MESSAGE)             // onError: no false success, no lastUploadAt stamp
+                    // ── HONESTY GUARD 2 (content-verified): did the cloud actually STORE our bytes? ──
+                    // A commit ack is not proof. Re-fetch the manifest and require EACH uploaded path to
+                    // now report the local file's SHA-1. Mere non-emptiness is NOT enough - a game that
+                    // already had a cloud file would otherwise report success while the cloud still held
+                    // the OLD save (the reported bug).
+                    val verified: Int
+                    val unverified: Int
+                    if (uploaded.get() == 0) {
+                        verified = 0
+                        unverified = 0
+                    } else {
+                        val remoteShaByPath: Map<String, ByteArray>? = try {
+                            val m = HashMap<String, ByteArray>()
+                            for (f in steamCloud.listFiles(appId)) {
+                                val key = sanitizeRelative(f.remotePath) ?: continue
+                                val sha = f.sha
+                                if (sha.size == SHA1_LEN) m[key] = sha
+                            }
+                            m
+                        } catch (e: Exception) {
+                            Log.w(TAG, "post-upload verification fetch failed for appId=$appId", e)
+                            null
+                        }
+                        if (remoteShaByPath == null) {
+                            verified = 0
+                            unverified = uploaded.get()
+                        } else {
+                            var ok = 0
+                            var bad = 0
+                            for ((key, sha) in uploadedShas) {
+                                val remote = remoteShaByPath[key]
+                                if (remote != null && remote.contentEquals(sha)) ok++ else bad++
+                            }
+                            verified = ok
+                            unverified = bad
+                        }
+                    }
+
+                    if (uploaded.get() > 0 && verified == 0 && unverified == uploaded.get() &&
+                        runCatching { steamCloud.listFiles(appId).isEmpty() }.getOrDefault(false)) {
+                        SaveSyncStore.markNoSteamCloud(ctx, appId)
+                        cb.onError(NO_RETENTION_MESSAGE)
+                    } else if (unverified > 0) {
+                        cb.onError("Uploaded $verified of ${uploaded.get()} changed; $unverified did not reach Steam Cloud")
                     } else {
                         cb.onDone("Uploaded ${uploaded.get()} changed, $upToDate already up-to-date")
                     }
