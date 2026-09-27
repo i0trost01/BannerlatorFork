@@ -237,7 +237,21 @@ public final class RealSteamLauncher {
             //    DInput on the launch) is applied by the caller. Best-effort: any failure here is
             //    logged and swallowed so passthrough can never block a launch. Runs AFTER staging so
             //    a re-staged overlay DLL is removed again. No-op (byte-unchanged) when the toggle is off.
-            if (controllerPassthrough) {
+            // A game that ships its OWN Steam Input action manifest hands input to Steam Input and gets
+            // nothing while the client keeps the pad to itself — enable Steam Input for it instead of
+            // stepping aside. Same decision + localconfig shape as GameNative (isSteamInputEnabled /
+            // setSteamInputPreference). A game with no own manifest is unchanged: the passthrough toggle
+            // still wins, and with neither set nothing is written. Best-effort; never blocks a launch.
+            boolean steamInput = false;
+            try {
+                SteamPrefs.INSTANCE.init(ctx.getApplicationContext());
+                steamInput = SteamPrefs.INSTANCE.getUseSteamInput(appId)
+                        || com.winlator.star.store.steaminput.SteamInputLayouts.INSTANCE
+                                .hasOwnManifest(new File(hostInstallDir));
+            } catch (Throwable ignored) {}
+            if (steamInput) {
+                applySteamInput(steamDir, repo, appId, new File(hostInstallDir));
+            } else if (controllerPassthrough) {
                 applyControllerPassthrough(steamDir, repo);
             }
 
@@ -326,6 +340,9 @@ public final class RealSteamLauncher {
             env.put("BL_AGENT_FRIENDS", social ? "1" : "0");
             // Region seed for the genuine client (additive; an agent without the feature ignores both).
             env.put("BL_STEAM_REGION", regionDesc);
+            // Steam Input for this app: the agent loads the game's own action manifest and activates the
+            // Steam Input action set for the pad instead of handing Steam the raw device (see applySteamInput).
+            if (steamInput) env.put("BL_AGENT_STEAMINPUT", "1");
             if (cmListWritten) env.put("WN_STEAM_CMLIST", STEAM_DIR_WIN + "\\config\\cmlist.json");
             // Secure-launch policy (agent p3b): WN_STEAM_VAC=1 → the agent keeps its full ~60 s
             // Steam-owned (VAC-secure) window before any direct start; 0 → the title never needed a
@@ -451,6 +468,78 @@ public final class RealSteamLauncher {
             }
         } catch (Throwable t) {
             Log.w(TAG, "passthrough: apply failed (non-fatal): " + t.getMessage());
+        }
+    }
+
+    // ── Steam Input ON (own-manifest games) ────────────────────────────────────────────────────────
+
+    /** The layout filename the headless host loads and activates for a game (GameNative convention). */
+    private static String hostLayoutFileName(int appId) { return "steamhost_controller_" + appId + ".vdf"; }
+
+    /**
+     * Turn Steam Input ON for this app so a game that hands input to Steam Input (own action manifest,
+     * e.g. Monster Train 2) actually receives the pad. Two levers, both best-effort:
+     * <ol>
+     *   <li>localconfig.vdf: the four SteamController_*Support keys → "1" and the per-app
+     *       apps/&lt;appId&gt;/UseSteamControllerConfig → "2" (force on) — GameNative's proven shape;</li>
+     *   <li>stage the game's own controller config VDF (Xbox 360 mapping) as the layout the host loads.</li>
+     * </ol>
+     * Any failure is logged and swallowed — this must never block a launch.
+     */
+    private static void applySteamInput(File steamDir, SteamRepository repo, int appId, File installDir) {
+        try {
+            File localConfig = resolveLocalConfig(steamDir, repo);
+            if (localConfig != null) {
+                String content = localConfig.isFile() ? FileUtils.readString(localConfig) : null;
+                String base = (content == null || content.trim().isEmpty()) ? EMPTY_LOCAL_CONFIG : content;
+                String updated = injectSteamInputPreference(base, appId, true);
+                if (updated == null) {
+                    Log.w(TAG, "steaminput: localconfig.vdf shape unexpected — preference skipped");
+                } else if (!updated.equals(content)) {
+                    File dir = localConfig.getParentFile();
+                    if (dir != null && !dir.exists()) dir.mkdirs();
+                    if (FileUtils.writeString(localConfig, updated)) {
+                        Log.i(TAG, "steaminput: enabled for appId=" + appId
+                                + " (SteamController_*Support=1, UseSteamControllerConfig=2)");
+                    } else {
+                        Log.w(TAG, "steaminput: failed writing localconfig.vdf");
+                    }
+                } else {
+                    Log.i(TAG, "steaminput: already enabled for appId=" + appId);
+                }
+            } else {
+                Log.w(TAG, "steaminput: no localconfig.vdf resolvable — Steam Input keys skipped");
+            }
+            stageHostControllerLayout(steamDir, appId, installDir);
+        } catch (Throwable t) {
+            Log.w(TAG, "steaminput: apply failed (non-fatal): " + t.getMessage());
+        }
+    }
+
+    /**
+     * Stage the game's own controller config VDF into the prefix Steam dir as the layout the headless
+     * host loads for this app. Missing manifest/config leaves the client on its own default.
+     */
+    private static void stageHostControllerLayout(File steamDir, int appId, File installDir) {
+        try {
+            String text = com.winlator.star.store.steaminput.SteamInputLayouts.INSTANCE
+                    .resolveHostConfigText(installDir);
+            if (text == null || text.isEmpty()) {
+                Log.i(TAG, "steaminput: no own layout for appId=" + appId + " — host default");
+                return;
+            }
+            if (!steamDir.exists() && !steamDir.mkdirs()) {
+                Log.w(TAG, "steaminput: could not create Steam dir — layout skipped");
+                return;
+            }
+            File layout = new File(steamDir, hostLayoutFileName(appId));
+            if (FileUtils.writeString(layout, text)) {
+                Log.i(TAG, "steaminput: staged " + layout.getName() + " (" + text.length() + " bytes)");
+            } else {
+                Log.w(TAG, "steaminput: failed writing " + layout.getName());
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "steaminput: layout staging failed (non-fatal): " + t.getMessage());
         }
     }
 
