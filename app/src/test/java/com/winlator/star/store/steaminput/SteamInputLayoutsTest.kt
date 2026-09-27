@@ -114,4 +114,45 @@ class SteamInputLayoutsTest {
         assertNull(SteamInputLayouts.findManifest(mine))
         assertTrue(!SteamInputLayouts.hasOwnManifest(mine))
     }
+
+    // ── host layout resolution (Xbox 360-first) ────────────────────────────────────────────────────
+
+    @Test
+    fun pickControllerConfigPath_prefersXbox360_whenTypesSaySo() {
+        val m = """
+            "Action Manifest"
+            {
+                "configurations"
+                {
+                    "controller_xboxone" { "0" { "path" "one.vdf" } }
+                    "controller_xbox360" { "0" { "path" "three60.vdf" } }
+                }
+            }
+        """.trimIndent()
+        assertEquals("three60.vdf",
+            SteamInputLayouts.pickControllerConfigPath(m, listOf("controller_xbox360", "controller_xboxone")))
+    }
+
+    @Test
+    fun resolveHostConfigText_readsTheXbox360Config() {
+        val root = tmp.newFolder("Monster Train 2")
+        val si = File(root, "MonsterTrain2_Data/StreamingAssets/SteamInput").apply { mkdirs() }
+        File(si, "steam_input_manifest.vdf").writeText(
+            "\"Action Manifest\"\n{\n\"configurations\"\n{\n" +
+                "\"controller_xboxone\" { \"0\" { \"path\" \"one.vdf\" } }\n" +
+                "\"controller_xbox360\" { \"0\" { \"path\" \"three60.vdf\" } }\n}\n}\n")
+        File(si, "one.vdf").writeText("\"controller_mappings\"\n{\n\"title\" \"ONE\"\n}\n")
+        File(si, "three60.vdf").writeText("\"controller_mappings\"\n{\n\"title\" \"XBOX360\"\n}\n")
+
+        val text = SteamInputLayouts.resolveHostConfigText(root)
+        assertNotNull(text)
+        assertTrue("expected the Xbox 360 config", text!!.contains("XBOX360"))
+    }
+
+    @Test
+    fun resolveHostConfigText_noManifest_returnsNull() {
+        val root = tmp.newFolder("PlainGame")
+        File(root, "game.exe").writeText("MZ")
+        assertNull(SteamInputLayouts.resolveHostConfigText(root))
+    }
 }
