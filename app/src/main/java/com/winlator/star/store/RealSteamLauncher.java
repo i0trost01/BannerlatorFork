@@ -240,8 +240,9 @@ public final class RealSteamLauncher {
             // A game that ships its OWN Steam Input action manifest hands input to Steam Input and gets
             // nothing while the client keeps the pad to itself — enable Steam Input for it instead of
             // stepping aside. Same decision + localconfig shape as GameNative (isSteamInputEnabled /
-            // setSteamInputPreference). A game with no own manifest is unchanged: the passthrough toggle
-            // still wins, and with neither set nothing is written. Best-effort; never blocks a launch.
+            // setSteamInputPreference). The passthrough toggle still wins only when the game ships NO own
+            // manifest; for own-manifest games Steam Input is always on and passthrough is bypassed. With
+            // neither set nothing is written. Best-effort; never blocks a launch.
             boolean steamInput = false;
             try {
                 SteamPrefs.INSTANCE.init(ctx.getApplicationContext());

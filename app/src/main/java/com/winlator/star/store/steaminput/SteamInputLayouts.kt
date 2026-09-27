@@ -86,6 +86,8 @@ object SteamInputLayouts {
     private fun File.firstNamed(): File? =
         listFiles()?.firstOrNull { it.isFile && it.name.equals(MANIFEST_NAME, true) }
 
+    /** Uses the game's own default controller order ([CONTROLLER_TYPES], Xbox One first); the 2-arg
+     *  overload takes an explicit preference order. */
     internal fun pickControllerConfigPath(manifestText: String): String? =
         pickControllerConfigPath(manifestText, CONTROLLER_TYPES)
 
@@ -95,6 +97,8 @@ object SteamInputLayouts {
         for (type in types) {
             val start = lines.indexOfFirst { it.trim().startsWith("\"$type\"") }
             if (start < 0) continue
+            // Scan the type's own line too (start, not start+1) so a same-line/inline manifest block
+            // resolves; the `i > start` guard stops the next type being mistaken for it.
             for (i in start until lines.size) {
                 val line = lines[i]
                 if (i > start && line.trim().startsWith("\"controller_")) break

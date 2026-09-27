@@ -160,9 +160,10 @@ private const val HELP_GOLDBERG_MODE =
     "Regular suits most games. Experimental turns on newer features for games Regular can't run. " +
         "ColdClient runs the game's own launcher (heaviest). Try Regular first."
 private const val HELP_STEAM_INPUT =
-    "Makes Steam answer games that use the Steam Input API, so their actions get a pad. On SteamLite it " +
-        "turns on automatically for games that ship their own Steam Input layout (e.g. Monster Train 2); " +
-        "flip it on for others. On Goldberg it needs the Experimental Goldberg mode."
+    "Makes Steam answer games that use the Steam Input API, so their actions get a pad. Games that ship " +
+        "their own Steam Input layout (e.g. Monster Train 2) are turned on automatically and the toggle " +
+        "cannot turn them off; Controller passthrough is ignored for them. Flip it on for other games. " +
+        "On Goldberg it needs the Experimental Goldberg mode."
 
 /**
  * The launch-method chooser popup — a COMPACT centered dialog that pops before a game launches. It is
@@ -225,7 +226,7 @@ fun LaunchMethodSheet(
     }
     var rememberChoice by remember(shortcut) { mutableStateOf(shortcut.getExtra("launchModeRemembered", "") == "1") }
     var controllerPassthrough by remember(shortcut) { mutableStateOf(shortcut.getExtra("controllerPassthrough", "") == "1") }
-    // "Use Steam Input" (Goldberg only). Seeded from the per-game pref; toggling persists immediately,
+    // "Use Steam Input" (Goldberg + SteamLite). Seeded from the per-game pref; toggling persists immediately,
     // so a later Cancel still keeps the choice (accepted behaviour).
     var steamInput by remember(shortcut) {
         mutableStateOf(if (appId > 0) SteamPrefs.getUseSteamInput(appId) else false)

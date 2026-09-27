@@ -13,6 +13,13 @@ public class RealSteamSteamInputTest {
 
     private static final String EMPTY = "\"UserLocalConfigStore\"\n{\n}\n";
 
+    private static final String[] SUPPORT_KEYS = {
+        "SteamController_XBoxSupport",
+        "SteamController_GenericGamepadSupport",
+        "SteamController_PSSupport",
+        "SteamController_SwitchSupport",
+    };
+
     /** Collapse all runs of whitespace so the indentation injectVdfKeys picks doesn't matter. */
     private static String norm(String s) { return s.replaceAll("\\s+", " "); }
 
@@ -21,10 +28,8 @@ public class RealSteamSteamInputTest {
         String out = RealSteamLauncher.injectSteamInputPreference(EMPTY, 2742830, true);
         assertNotNull(out);
         String n = norm(out);
-        assertTrue(n.contains("\"SteamController_XBoxSupport\" \"1\""));
-        assertTrue(n.contains("\"SteamController_GenericGamepadSupport\" \"1\""));
-        assertTrue(n.contains("\"2742830\""));
-        assertTrue(n.contains("\"UseSteamControllerConfig\" \"2\""));
+        for (String k : SUPPORT_KEYS) assertTrue(n.contains("\"" + k + "\" \"1\""));
+        assertTrue(n.contains("\"2742830\" { \"UseSteamControllerConfig\" \"2\" }"));
     }
 
     @Test
@@ -32,7 +37,7 @@ public class RealSteamSteamInputTest {
         String out = RealSteamLauncher.injectSteamInputPreference(EMPTY, 2742830, false);
         assertNotNull(out);
         String n = norm(out);
-        assertTrue(n.contains("\"SteamController_XBoxSupport\" \"0\""));
+        for (String k : SUPPORT_KEYS) assertTrue(n.contains("\"" + k + "\" \"0\""));
         assertTrue(n.contains("\"UseSteamControllerConfig\" \"0\""));
     }
 

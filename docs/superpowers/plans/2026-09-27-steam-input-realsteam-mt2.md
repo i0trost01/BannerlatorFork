@@ -27,6 +27,15 @@ Monster Train 2 is "Full Controller Support" **and** "Steam Input API Supported"
 
 Do **not** spend more effort on the Goldberg path for this game.
 
+## Agent-side follow-up (out of this repo)
+
+This branch is the APP-SIDE HALF. The clean-room Steam agent (`agent-src`, outside this repo) must:
+
+- **(a)** read env `BL_AGENT_STEAMINPUT=1`, and
+- **(b)** load `steamhost_controller_<appId>.vdf` from the prefix Steam dir and activate it for the app.
+
+Both names are frozen: the app writes exactly these. Until the agent is updated, merging this branch writes the localconfig keys + stages the VDF + sets the env var, but the input path stays inert.
+
 ## Global Constraints
 
 - Mixed Kotlin/Java module; match each file's existing language and style.

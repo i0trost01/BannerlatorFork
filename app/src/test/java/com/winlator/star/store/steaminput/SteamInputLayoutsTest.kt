@@ -150,6 +150,20 @@ class SteamInputLayoutsTest {
     }
 
     @Test
+    fun resolveHostConfigText_fallsBackToXboxOneWhenNoXbox360() {
+        val root = tmp.newFolder("XboxOneOnlyGame")
+        val si = File(root, "XboxOneOnly_Data/StreamingAssets/SteamInput").apply { mkdirs() }
+        File(si, "steam_input_manifest.vdf").writeText(
+            "\"Action Manifest\"\n{\n\"configurations\"\n{\n" +
+                "\"controller_xboxone\" { \"0\" { \"path\" \"one.vdf\" } }\n}\n}\n")
+        File(si, "one.vdf").writeText("\"controller_mappings\"\n{\n\"title\" \"ONE\"\n}\n")
+
+        val text = SteamInputLayouts.resolveHostConfigText(root)
+        assertNotNull(text)
+        assertTrue("expected the Xbox One config", text!!.contains("ONE"))
+    }
+
+    @Test
     fun resolveHostConfigText_noManifest_returnsNull() {
         val root = tmp.newFolder("PlainGame")
         File(root, "game.exe").writeText("MZ")
