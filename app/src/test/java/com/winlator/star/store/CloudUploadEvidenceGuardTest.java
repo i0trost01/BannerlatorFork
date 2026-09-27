@@ -63,4 +63,38 @@ public class CloudUploadEvidenceGuardTest {
         assertTrue("must keep the honest local-only summary for a truly empty manifest",
                 body.contains("No Steam Cloud support"));
     }
+
+    @Test
+    public void uploadClearsStaleMarkWhenCloudFilesExist() throws IOException {
+        String src = readRepoFile("src", "main", "java", "com", "winlator", "star", "store", "SteamCloudSaveManager.kt");
+        int upload = src.indexOf("fun uploadSaves(");
+        assertTrue("uploadSaves must exist", upload >= 0);
+        int next = src.indexOf("fun uploadFromLibrary(", upload);
+        if (next < 0) next = src.length();
+        String body = src.substring(upload, next);
+        assertTrue("upload must re-check the mark against the live manifest",
+                body.contains("isMarkedNoSteamCloud"));
+        assertTrue("upload must probe the live manifest when marked", body.contains("listFiles("));
+        assertTrue("upload must clear a stale mark once cloud files are proven",
+                body.contains("clearNoSteamCloud("));
+    }
+
+    @Test
+    public void saveSyncStoreExposesClearNoSteamCloud() throws IOException {
+        String src = readRepoFile("src", "main", "java", "com", "winlator", "star", "store", "SaveSyncStore.kt");
+        assertTrue("SaveSyncStore must expose a clearNoSteamCloud latch-clearing API",
+                src.contains("fun clearNoSteamCloud("));
+    }
+
+    @Test
+    public void hasCloudSupportTreatsMarkAsUnknownNotNoSupport() throws IOException {
+        String src = readRepoFile("src", "main", "java", "com", "winlator", "star", "store", "SteamCloudSaveManager.kt");
+        int fn = src.indexOf("fun hasCloudSupport(");
+        assertTrue("hasCloudSupport must exist", fn >= 0);
+        int end = src.indexOf("fun ", fn + 10);
+        String body = src.substring(fn, end < 0 ? src.length() : end);
+        assertTrue("hasCloudSupport must consult the no-retention mark", body.contains("isMarkedNoSteamCloud"));
+        assertTrue("hasCloudSupport must return null (unknown) for a marked game, not false",
+                body.contains("return null"));
+    }
 }

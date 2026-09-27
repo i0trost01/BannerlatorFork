@@ -249,6 +249,11 @@ object SaveSyncStore {
         return rec.optBoolean("noSteamCloud", false)
     }
 
+    /** Clear the [markNoSteamCloud] latch when the cloud is later proven to have files. */
+    fun clearNoSteamCloud(ctx: Context, appId: Int) {
+        writeHook(ctx, appId) { rec -> rec.remove("noSteamCloud") }
+    }
+
     // ── State machine ─────────────────────────────────────────────────────────
 
     private fun computeState(

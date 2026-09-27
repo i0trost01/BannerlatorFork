@@ -174,10 +174,18 @@ object SteamCloudSaveManager {
 
                 // ── HONESTY GUARD 0: already proven to not retain cloud uploads? ───────
                 // If a prior upload committed files but Steam kept nothing, we marked this game.
-                // Short-circuit before opening any batch — no work, honest message, no false success.
+                // The mark is a strong signal but not infallible (a transient empty post-upload
+                // manifest could set it), so before honoring it we re-check the live manifest: if the
+                // game HAS cloud files now, the mark is stale — clear it and proceed. Only a genuinely
+                // empty manifest keeps the honest no-retention message.
                 if (SaveSyncStore.isMarkedNoSteamCloud(appId)) {
-                    cb.onError(NO_RETENTION_MESSAGE)
-                    return@Thread
+                    val hasCloudFiles = runCatching { steamCloud.listFiles(appId).isNotEmpty() }.getOrDefault(false)
+                    if (hasCloudFiles) {
+                        SaveSyncStore.clearNoSteamCloud(ctx, appId)
+                    } else {
+                        cb.onError(NO_RETENTION_MESSAGE)
+                        return@Thread
+                    }
                 }
 
                 // ── HONESTY GUARD 1: does this game even support Steam Cloud? ───────────
@@ -338,19 +346,25 @@ object SteamCloudSaveManager {
      * product info (`appinfo → ufs → savefiles`) — the same source GameNative uses. A game with NO
      * usable save-file patterns has no cloud store; uploading to it "succeeds" but persists nothing.
      *
+     * A PRESENT `ufs` block that declares no usable save files is the only thing that yields a
+     * definitive `false`; an absent/unrecognized `ufs` block is unknown (`null`), never a cached
+     * `false`, so the live-manifest evidence path still gets a chance.
+     *
      * Returns:
      *  - `true`  — the app declares ≥1 usable UFS save-file pattern (e.g. Half-Life 2).
      *  - `false` — the app's product info is populated but declares no save files (e.g. FlatOut 2).
      *  - `null`  — couldn't determine (not signed in, PICS query failed/timed out, or metadata-only
-     *              product info with no populated KeyValues). Callers should NOT treat null as "no
-     *              cloud"; upload falls back to a post-upload persistence check instead.
+     *              product info with no populated KeyValues), OR the game carries a stale
+     *              [SaveSyncStore.isMarkedNoSteamCloud] latch. Callers should NOT treat null as "no
+     *              cloud"; upload falls back to a live-manifest check (and clears the stale mark).
      *
      * Definitive results are cached per app (the UFS config is stable); `null` is never cached.
      */
     fun hasCloudSupport(ctx: Context, appId: Int): Boolean? {
-        // A game we already proved doesn't retain uploads is definitively "no cloud" — this wins over
-        // both the cache and PICS (FlatOut 2 declares UFS savefiles yet keeps nothing).
-        if (SaveSyncStore.isMarkedNoSteamCloud(appId)) return false
+        // A game marked as not-retaining is a strong no-cloud signal, but not infallible — return
+        // "unknown" so the upload path re-checks the live manifest (and clears the mark if stale)
+        // rather than a hard false that would block a game whose cloud files demonstrably exist.
+        if (SaveSyncStore.isMarkedNoSteamCloud(appId)) return null
 
         cloudSupportCache[appId]?.let { return it }
 
@@ -531,8 +545,10 @@ object SteamCloudSaveManager {
     }
 
     /**
-     * Blocking Collect→Upload (additive). If [hasCloudSupportCached] is `false`, does the local Collect
-     * (Container→Library) ONLY and returns a "local only" summary — no cloud batch is opened. Never
+     * Blocking Collect→Upload (additive). If [hasCloudSupportCached] is `false` AND the live cloud
+     * manifest is empty, does the local Collect (Container→Library) ONLY and returns a "local only"
+     * summary — no cloud batch is opened. But a non-empty live manifest is direct proof the game has
+     * a cloud store, so in that case the real sync (which DOES open a batch) proceeds anyway. Never
      * throws; returns an error/summary String.
      */
     @JvmStatic
