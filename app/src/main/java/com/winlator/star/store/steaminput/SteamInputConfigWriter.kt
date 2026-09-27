@@ -11,14 +11,25 @@ object SteamInputConfigWriter {
 
     internal const val CONTROLLER_DIR = "steam_settings/controller"
 
+    private val UNSAFE_NAME_CHARS = Regex("[^A-Za-z0-9._-]")
+
+    /** Maps an action-set name to a safe filename stem inside the controller dir (no traversal). */
+    internal fun sanitizeActionSetName(name: String): String {
+        val cleaned = name.replace(UNSAFE_NAME_CHARS, "_")
+        return if (cleaned == "." || cleaned == "..") "_" else cleaned
+    }
+
     /** Writes one file per action set. Returns the number of files written; 0 = nothing to do. */
     fun write(installDir: File, vdfText: String): Int {
         val sets = SteamInputVdfConverter.convert(vdfText)
         if (sets.isEmpty()) return 0
-        val dir = File(installDir, CONTROLLER_DIR).apply { mkdirs() }
+        val dir = File(installDir, CONTROLLER_DIR)
+        // Drop stale action-set files from a previous layout before writing this one.
+        dir.takeIf { it.isDirectory }?.deleteRecursively()
+        dir.mkdirs()
         var written = 0
         for ((setName, content) in sets) {
-            File(dir, "$setName.txt").writeText(content)
+            File(dir, "${sanitizeActionSetName(setName)}.txt").writeText(content)
             written++
         }
         return written

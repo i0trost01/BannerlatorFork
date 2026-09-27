@@ -463,7 +463,8 @@ fun BigPictureScreen(navController: NavController) {
                 // a plain launch.
                 remembered && sc.getExtra("launchMode", "") == "Goldberg" -> {
                     SteamPrefs.init(context)
-                    launchWithGoldberg(sc, SteamPrefs.getGoldbergMode(steamAppIdOf(sc)))
+                    val gm = SteamPrefs.getGoldbergMode(steamAppIdOf(sc)).let { if (it == GoldbergMode.OFF) GoldbergMode.REGULAR else it }
+                    launchWithGoldberg(sc, gm)
                 }
                 remembered -> launchShortcut(activity, sc)
                 else -> launchChoiceFor = sc

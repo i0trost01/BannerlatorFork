@@ -542,7 +542,8 @@ fun ShortcutsScreen(vm: ShortcutsViewModel = viewModel()) {
             // a plain launch.
             remembered && shortcut.getExtra("launchMode", "") == "Goldberg" -> {
                 SteamPrefs.init(context)
-                launchWithGoldberg(shortcut, SteamPrefs.getGoldbergMode(steamAppIdOf(shortcut)))
+                val gm = SteamPrefs.getGoldbergMode(steamAppIdOf(shortcut)).let { if (it == GoldbergMode.OFF) GoldbergMode.REGULAR else it }
+                launchWithGoldberg(shortcut, gm)
             }
             remembered -> launchShortcutNow(activity, shortcut)
             else -> launchChoiceFor = shortcut

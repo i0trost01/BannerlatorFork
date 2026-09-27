@@ -73,4 +73,58 @@ class SteamInputConfigWriterTest {
         // second clear is a no-op, must not throw
         SteamInputConfigWriter.clear(install)
     }
+
+    @Test
+    fun sanitizeActionSetName_stripsTraversalAndUnsafeChars() {
+        assertEquals("_", SteamInputConfigWriter.sanitizeActionSetName("."))
+        assertEquals("_", SteamInputConfigWriter.sanitizeActionSetName(".."))
+        assertEquals(".._evil", SteamInputConfigWriter.sanitizeActionSetName("../evil"))
+        assertEquals("a_b", SteamInputConfigWriter.sanitizeActionSetName("a/b"))
+        assertEquals("Default", SteamInputConfigWriter.sanitizeActionSetName("Default"))
+        assertEquals("a_b-c.d_e", SteamInputConfigWriter.sanitizeActionSetName("a b-c.d/e"))
+    }
+
+    @Test
+    fun write_clearsStaleActionSetsFromPreviousLayout() {
+        val install = tmp.newFolder("Game")
+        SteamInputConfigWriter.write(install, oneActionSetVdf)
+        assertTrue(File(install, "steam_settings/controller/InGame.txt").isFile)
+
+        val otherLayout = """
+            "controller_mappings"
+            {
+                "actions" { "Menu" { } }
+                "group"
+                {
+                    "id" "1"
+                    "mode" "button_diamond"
+                    "inputs"
+                    {
+                        "button_a"
+                        {
+                            "activators"
+                            {
+                                "Full_Press"
+                                {
+                                    "bindings"
+                                    {
+                                        "binding" "game_action Menu Jump"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                "preset"
+                {
+                    "name" "Menu"
+                    "group_source_bindings" { "1" "button_diamond active" }
+                }
+            }
+        """.trimIndent()
+
+        SteamInputConfigWriter.write(install, otherLayout)
+        assertFalse(File(install, "steam_settings/controller/InGame.txt").exists())
+        assertTrue(File(install, "steam_settings/controller/Menu.txt").isFile)
+    }
 }
