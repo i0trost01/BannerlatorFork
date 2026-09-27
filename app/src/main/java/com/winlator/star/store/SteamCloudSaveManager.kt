@@ -359,11 +359,15 @@ object SteamCloudSaveManager {
                     // At least one file landed → SUCCESS, even if some per-file commits failed. Most
                     // games have a single changed save; skipping/deduping the rest is fine (the cloud
                     // already holds them).
-                    val extra = if (unverified > 0) "; $unverified already in cloud or skipped" else ""
-                    cb.onDone("Uploaded $verified of ${uploaded.get()} changed$extra, $upToDate already up-to-date")
+                    val failed = toUpload.size - uploaded.get()
+                    val extra = buildString {
+                        if (unverified > 0) append("; $unverified already in cloud or skipped")
+                        if (failed > 0) append("; $failed failed")
+                    }
+                    cb.onDone("Uploaded $verified of ${toUpload.size} changed$extra, $upToDate already up-to-date")
                 } else if (allOk.get()) {
-                    // Every commit acked, yet nothing verified and the cloud is known non-empty →
-                    // honest failure (the cloud kept none of our bytes).
+                    // Every commit acked, yet nothing verified (cloud kept none of our bytes, or we
+                    // could not verify) → honest failure.
                     cb.onError("Uploaded 0 of ${uploaded.get()} changed; no file reached Steam Cloud")
                 } else {
                     // A per-file commit failed AND verification proved nothing landed → honest failure.

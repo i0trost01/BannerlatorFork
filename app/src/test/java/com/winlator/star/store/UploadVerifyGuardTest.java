@@ -16,7 +16,8 @@ import org.junit.Test;
  * Previously uploadSaves reported success from isCloudManifestEmpty - "is the whole manifest
  * non-empty?" - so a game that already had a cloud file reported "Uploaded N changed" even when the
  * commit did not persist the new bytes. The post-upload decision must now verify each uploaded path's
- * SHA against a fresh manifest, and never claim success for an unverified path.
+ * SHA against a fresh manifest. Success requires at least one verified path; a partial success (some
+ * paths unverified or failed) is allowed, but the reported counts must not hide the failures.
  */
 public class UploadVerifyGuardTest {
 
