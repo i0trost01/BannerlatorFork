@@ -189,8 +189,15 @@ object SteamCloudSaveManager {
                 // NOT fire — we must not stamp a lastUploadAt "cloud sync" that never happened.
                 val support: Boolean? = hasCloudSupport(ctx, appId)
                 if (support == false) {
-                    cb.onError(NO_CLOUD_MESSAGE)
-                    return@Thread
+                    // The PICS verdict is a metadata GUESS and can be a false negative for Auto-Cloud
+                    // shapes it doesn't recognize (e.g. Death's Gambit: Afterlife). The live cloud
+                    // manifest is ground truth - download already trusts it. If the game has cloud
+                    // files, upload; only a genuinely empty manifest honors the no-cloud message.
+                    val hasCloudFiles = runCatching { steamCloud.listFiles(appId).isNotEmpty() }.getOrDefault(false)
+                    if (!hasCloudFiles) {
+                        cb.onError(NO_CLOUD_MESSAGE)
+                        return@Thread
+                    }
                 }
 
                 // ── INCREMENTAL DIFF (new — still strictly additive) ───────────────────
@@ -533,7 +540,12 @@ object SteamCloudSaveManager {
         return try {
             // No-cloud games: still preserve the save locally (Collect into the Library), just don't
             // pretend to upload. Same honest posture as uploadSaves' NO_CLOUD path.
-            if (hasCloudSupportCached(ctx, appId) == false) {
+            val cloudKnownNoSupport = hasCloudSupportCached(ctx, appId) == false
+            val hasCloudFiles = if (cloudKnownNoSupport) {
+                runCatching { requireCloud()?.listFiles(appId)?.isNotEmpty() == true }.getOrDefault(false)
+            } else true
+            if (cloudKnownNoSupport && !hasCloudFiles) {
+                // No cloud files AND the heuristic says no support -> honest local-only Collect.
                 val r = runBlockingMove(BLOCKING_BOUND_MS) { cb -> collectFromContainer(ctx, appId, installDir, cb) }
                 return "No Steam Cloud support — saved locally only (${r.summary})"
             }
