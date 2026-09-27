@@ -274,7 +274,8 @@ object SteamCloudSaveManager {
                 val uploaded = AtomicInteger(0)
                 val allOk = AtomicBoolean(true)
                 // What we actually uploaded and the content we expect to find remotely, for the
-                // post-upload verification below. Concurrent map: the loop runs on a bounded pool.
+                // post-upload verification below. Concurrent map kept as-is (harmless): the upload
+                // loop below is sequential now.
                 val uploadedShas = ConcurrentHashMap<String, ByteArray>()
                 // Upload the batch's files SEQUENTIALLY (WinNative parity). The per-file protocol is
                 // beginFileUpload -> block PUTs -> commitFileUpload against ONE open batch; interleaving
