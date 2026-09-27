@@ -2,6 +2,8 @@ package com.winlator.star.store
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.winlator.star.store.steaminput.SteamInputLayouts
+import java.io.File
 
 /**
  * Persists Steam session data in SharedPreferences "steam_prefs".
@@ -96,15 +98,33 @@ object SteamPrefs {
     // get a pad. Keyed by appId like goldbergMode, so it survives session changes.
 
     private const val K_STEAM_INPUT_PREFIX = "steam_input_"
+    private const val K_STEAM_INPUT_CHOSEN_PREFIX = "steam_input_chosen_"
 
     /** True if the user opted this game into gbe_fork Steam Input emulation. Default false. */
     fun getUseSteamInput(appId: Int): Boolean =
         prefs.getBoolean(K_STEAM_INPUT_PREFIX + appId, false)
 
-    /** Persist the per-game Steam Input opt-in. */
+    /** True once the user has explicitly toggled Steam Input for [appId] (their choice then wins). */
+    fun isSteamInputChosen(appId: Int): Boolean =
+        prefs.getBoolean(K_STEAM_INPUT_CHOSEN_PREFIX + appId, false)
+
+    /** Persist the per-game Steam Input opt-in, recording that the user made an explicit choice. */
     fun setUseSteamInput(appId: Int, v: Boolean) {
-        prefs.edit().putBoolean(K_STEAM_INPUT_PREFIX + appId, v).apply()
+        prefs.edit()
+            .putBoolean(K_STEAM_INPUT_PREFIX + appId, v)
+            .putBoolean(K_STEAM_INPUT_CHOSEN_PREFIX + appId, true)
+            .apply()
     }
+
+    /**
+     * The EFFECTIVE Steam Input state for the RealSteam path: an explicit user choice wins; otherwise a
+     * game that ships its own Steam Input action manifest defaults to ON. For a game whose client grabs
+     * the pad but has no bindings for it, the user must be able to turn this OFF and let the game read
+     * the pad directly (a game with native controller support). [installDir] is the game install root.
+     */
+    fun effectiveUseSteamInput(appId: Int, installDir: File?): Boolean =
+        if (isSteamInputChosen(appId)) getUseSteamInput(appId)
+        else (installDir != null && SteamInputLayouts.hasOwnManifest(installDir))
 
     // ── DLC picker: per-game EXCLUDED DLC (opt-out) ──────────────────────────
     // Owned DLC downloads with the game by default; the picker lets the user opt

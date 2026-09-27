@@ -229,7 +229,12 @@ fun LaunchMethodSheet(
     // "Use Steam Input" (Goldberg + SteamLite). Seeded from the per-game pref; toggling persists immediately,
     // so a later Cancel still keeps the choice (accepted behaviour).
     var steamInput by remember(shortcut) {
-        mutableStateOf(if (appId > 0) SteamPrefs.getUseSteamInput(appId) else false)
+        mutableStateOf(
+            if (appId > 0)
+                SteamPrefs.effectiveUseSteamInput(
+                    appId, com.winlator.star.store.EaSupport.installDirOf(shortcut))
+            else false
+        )
     }
     // "Requires secure (VAC) launch" (SteamLite only). Seeded from the saved override, else from the
     // VAC marker the library sync recorded from PICS app-info (loaded off-main). Persisted only once the

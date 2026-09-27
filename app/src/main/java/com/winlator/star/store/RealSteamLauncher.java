@@ -251,9 +251,7 @@ public final class RealSteamLauncher {
             boolean steamInput = false;
             try {
                 SteamPrefs.INSTANCE.init(ctx.getApplicationContext());
-                steamInput = SteamPrefs.INSTANCE.getUseSteamInput(appId)
-                        || com.winlator.star.store.steaminput.SteamInputLayouts.INSTANCE
-                                .hasOwnManifest(new File(hostInstallDir));
+                steamInput = SteamPrefs.INSTANCE.effectiveUseSteamInput(appId, new File(hostInstallDir));
             } catch (Throwable ignored) {}
             if (steamInput) {
                 applySteamInput(steamDir, repo, appId, new File(hostInstallDir));
