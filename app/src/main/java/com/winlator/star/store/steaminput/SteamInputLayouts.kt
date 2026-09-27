@@ -26,6 +26,10 @@ object SteamInputLayouts {
     private const val MANIFEST_NAME = "steam_input_manifest.vdf"
     private val CONTROLLER_TYPES = listOf("controller_xboxone", "controller_xbox360", "controller_generic")
 
+    /** The headless genuine-Steam host identifies as an Xbox 360 pad, so it wants the 360 config
+     *  (GameNative HOST_CONTROLLER_TYPES). */
+    private val HOST_CONTROLLER_TYPES = listOf("controller_xbox360", "controller_xboxone", "controller_generic")
+
     fun resolve(context: Context, installRoot: File): String? {
         val provided = File(installRoot, PROVIDED_REL)
             .takeIf { it.isFile }
@@ -44,11 +48,21 @@ object SteamInputLayouts {
     /** True when the install ships its own Steam Input action manifest. */
     fun hasOwnManifest(installRoot: File): Boolean = findManifest(installRoot) != null
 
-    internal fun resolveOwnManifestConfig(installRoot: File): String? {
+    /**
+     * The controller config VDF the genuine Steam client should use for this game, read from the game's
+     * OWN action manifest and preferring the Xbox 360 mapping. Null when the game ships none.
+     */
+    fun resolveHostConfigText(installRoot: File): String? =
+        resolveManifestConfig(installRoot, HOST_CONTROLLER_TYPES)
+
+    internal fun resolveOwnManifestConfig(installRoot: File): String? =
+        resolveManifestConfig(installRoot, CONTROLLER_TYPES)
+
+    private fun resolveManifestConfig(installRoot: File, types: List<String>): String? {
         val manifest = findManifest(installRoot) ?: return null
         val dir = manifest.parentFile ?: return null
         val text = runCatching { manifest.readText() }.getOrNull() ?: return null
-        val rel = pickControllerConfigPath(text) ?: return null
+        val rel = pickControllerConfigPath(text, types) ?: return null
         val cfg = File(dir, rel.replace('\\', '/'))
         return runCatching { cfg.takeIf { it.isFile }?.readText() }.getOrNull()
     }
@@ -72,19 +86,18 @@ object SteamInputLayouts {
     private fun File.firstNamed(): File? =
         listFiles()?.firstOrNull { it.isFile && it.name.equals(MANIFEST_NAME, true) }
 
-    /**
-     * Pure: reads an "Action Manifest" text and returns the config `.vdf` path for the best available
-     * controller type (Xbox One → Xbox 360 → generic), or null.
-     */
-    internal fun pickControllerConfigPath(manifestText: String): String? {
+    internal fun pickControllerConfigPath(manifestText: String): String? =
+        pickControllerConfigPath(manifestText, CONTROLLER_TYPES)
+
+    internal fun pickControllerConfigPath(manifestText: String, types: List<String>): String? {
         val lines = manifestText.lines()
         val pathRe = Regex("\"path\"\\s+\"([^\"]+)\"")
-        for (type in CONTROLLER_TYPES) {
+        for (type in types) {
             val start = lines.indexOfFirst { it.trim().startsWith("\"$type\"") }
             if (start < 0) continue
-            for (i in start + 1 until lines.size) {
+            for (i in start until lines.size) {
                 val line = lines[i]
-                if (line.trim().startsWith("\"controller_")) break
+                if (i > start && line.trim().startsWith("\"controller_")) break
                 pathRe.find(line)?.let { return it.groupValues[1] }
             }
         }
