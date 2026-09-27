@@ -5,6 +5,8 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import com.winlator.star.core.FileUtils
+import com.winlator.star.store.steaminput.SteamInputConfigWriter
+import com.winlator.star.store.steaminput.SteamInputLayouts
 import java.io.File
 import java.io.RandomAccessFile
 
@@ -156,7 +158,7 @@ object GoldbergPatcher {
         // no harm before a restore).
         sharedPrep(context, targets, appId)
 
-        applySteamInput(context, appId, installDir)
+        applySteamInput(context, appId, targets)
 
         // GOLDEN RULE: always restore pristine dlls from .bak first, so switching
         // tiers never stacks Goldberg dlls on top of each other.
@@ -396,20 +398,22 @@ object GoldbergPatcher {
      * Writes or clears the gbe_fork Steam Input action-set files for this game based on the
      * per-game preference. Best-effort: never throws into the launch path.
      */
-    private fun applySteamInput(context: Context, appId: Int, installDir: String) {
+    private fun applySteamInput(context: Context, appId: Int, targets: List<PatchTarget>) {
         try {
-            val dir = File(installDir)
+            val dirs = targets.map { it.dir }.distinct()
+            if (dirs.isEmpty()) return
             SteamPrefs.init(context.applicationContext)
             if (SteamPrefs.getUseSteamInput(appId)) {
-                val vdf = SteamInputLayouts.resolve(context.applicationContext, dir)
+                val vdf = SteamInputLayouts.resolve(context.applicationContext, dirs.first())
                 if (vdf.isNullOrEmpty()) {
                     Log.w(TAG, "steam input: no layout for appId $appId")
                 } else {
-                    val n = com.winlator.star.store.steaminput.SteamInputConfigWriter.write(dir, vdf)
+                    var n = 0
+                    for (dir in dirs) n += SteamInputConfigWriter.write(dir, vdf)
                     Log.i(TAG, "steam input: wrote $n action-set file(s) for appId $appId")
                 }
             } else {
-                com.winlator.star.store.steaminput.SteamInputConfigWriter.clear(dir)
+                for (dir in dirs) SteamInputConfigWriter.clear(dir)
             }
         } catch (e: Exception) {
             Log.w(TAG, "steam input apply failed for appId $appId", e)
