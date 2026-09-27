@@ -2794,6 +2794,26 @@ public class XServerDisplayActivity extends AppCompatActivity {
             ProcessHelper.addDebugCallback(line -> XServerDialogState.INSTANCE.appendLog(line));
         }
 
+        // Steam Input diagnostics (temporary): report the toggle/tier, the gbe_fork controller files
+        // and the game's own Steam Input manifest into the in-game Debug panel. Steam games only,
+        // off the main thread so the install scan can't stall the launch.
+        try {
+            final String siAppIdStr = shortcut != null ? shortcut.getExtra("steamAppId", "") : "";
+            final int siAppId = siAppIdStr.isEmpty() ? 0 : Integer.parseInt(siAppIdStr);
+            if (siAppId > 0) {
+                final android.content.Context siCtx = getApplicationContext();
+                new Thread(() -> {
+                    try {
+                        java.io.File siDir = com.winlator.star.store.EaSupport.installDirOf(shortcut);
+                        java.util.List<String> siLines =
+                                com.winlator.star.store.steaminput.SteamInputDiagnostics.INSTANCE
+                                        .report(siCtx, siDir, siAppId);
+                        runOnUiThread(() -> { for (String l : siLines) XServerDialogState.INSTANCE.appendLog(l); });
+                    } catch (Throwable ignored) {}
+                }, "steam-input-diag").start();
+            }
+        } catch (Throwable ignored) {}
+
         graphicsDriver = container.getGraphicsDriver();
         rendererDriverId = container.getRendererDriverId();
         String graphicsDriverConfig = container.getGraphicsDriverConfig();
