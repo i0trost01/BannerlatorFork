@@ -474,13 +474,15 @@ class BlSteamSession : AutoCloseable {
             if (blocks0 == null || blocks0.length() == 0) {
                 android.util.Log.i(
                     "BlSteamSession",
-                    "cloud upload short-circuit: blocks=0 for $filename — file already in cloud, committing"
+                    "cloud upload short-circuit: blocks=0 for $filename — Steam already holds this " +
+                        "content (dedup); commit sent, treating as success"
                 )
-                // WinNative parity: the commit's result is authoritative. Report it rather than
-                // assuming success — a zero-block begin is normally "already in cloud", but only the
-                // commit confirms Steam kept it.
-                val committed = nativeCloudCommitFileUpload(h, true, appId, fileShaHex, filename)
-                return committed
+                // blocks=0 is Steam's dedup signal: it already has this file, so there is nothing to
+                // PUT and the commit returns file_committed=false (nothing new to store). That is
+                // SUCCESS, not failure — reporting it as FAILED made already-present saves look like
+                // failed uploads. WinNative treats this as success too.
+                nativeCloudCommitFileUpload(h, true, appId, fileShaHex, filename)
+                return true
             }
         } catch (e: Exception) {
             android.util.Log.w("BlSteamSession", "uploadCloudFile early-parse failed: $filename", e)

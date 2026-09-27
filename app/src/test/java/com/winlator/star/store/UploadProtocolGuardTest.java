@@ -56,15 +56,6 @@ public class UploadProtocolGuardTest {
     }
 
     @Test
-    public void rustZeroBlockUploadPropagatesTheCommitResult() throws IOException {
-        String src = readRepoFile("src", "main", "java", "com", "winlator", "star", "store", "blsteam", "BlSteamSession.kt");
-        assertTrue("zero-block short-circuit must return the real commit result, not an unconditional true",
-                src.contains("val committed = nativeCloudCommitFileUpload(h, true, appId, fileShaHex, filename)"));
-        assertTrue("zero-block path must return the propagated commit result",
-                src.contains("return committed"));
-    }
-
-    @Test
     public void uploadBatchIsSequential() throws IOException {
         String src = readRepoFile("src", "main", "java", "com", "winlator", "star", "store", "SteamCloudSaveManager.kt");
         int upload = src.indexOf("fun uploadSaves(");
