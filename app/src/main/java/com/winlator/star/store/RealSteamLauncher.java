@@ -596,6 +596,24 @@ public final class RealSteamLauncher {
     }
 
     /**
+     * Force the genuine client's Steam Input preference for one app into a localconfig.vdf: the four
+     * SteamController_*Support keys under {@code UserLocalConfigStore > system}, and the per-app
+     * {@code apps/<appId>/UseSteamControllerConfig} (2 = force on, 0 = global default). Mirrors
+     * GameNative's setSteamInputPreference, which is what makes the real client hand a game Steam
+     * Input for titles that ship their own action manifest (Monster Train 2). Returns null when the
+     * content isn't a UserLocalConfigStore shape (caller skips the write).
+     */
+    static String injectSteamInputPreference(String content, int appId, boolean enabled) {
+        LinkedHashMap<String, String> support = new LinkedHashMap<>();
+        for (String k : STEAM_INPUT_KEYS) support.put(k, enabled ? "1" : "0");
+        String withSupport = injectVdfKeys(content, new String[] {"system"}, support);
+        if (withSupport == null) return null;
+        LinkedHashMap<String, String> perApp = new LinkedHashMap<>();
+        perApp.put("UseSteamControllerConfig", enabled ? "2" : "0");
+        return injectVdfKeys(withSupport, new String[] {"apps", String.valueOf(appId)}, perApp);
+    }
+
+    /**
      * Return {@code content} with {@code keys} forced inside the block {@code UserLocalConfigStore > path[0] >
      * path[1] > …} — rewriting a present key (case-insensitive, spelling kept) in place and inserting any
      * missing one before the block's close brace, synthesizing the missing tail of {@code path} as nested
