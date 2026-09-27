@@ -303,66 +303,70 @@ object SteamCloudSaveManager {
                 // Close the batch with the aggregate result (OK only if every file committed).
                 steamCloud.completeBatch(appId, batchId, allOk.get())
 
-                if (allOk.get()) {
-                    // ── HONESTY GUARD 2 (content-verified): did the cloud actually STORE our bytes? ──
-                    // A commit ack is not proof. Re-fetch the manifest and require EACH uploaded path to
-                    // now report the local file's SHA-1. Mere non-emptiness is NOT enough - a game that
-                    // already had a cloud file would otherwise report success while the cloud still held
-                    // the OLD save (the reported bug).
-                    // Fetch once; reused for both the per-path verification and the empty-manifest
-                    // no-retention signal (no third round-trip, no transient disagreement).
-                    val remoteShaByPath: Map<String, ByteArray>? = if (uploaded.get() == 0) null else try {
-                        val m = HashMap<String, ByteArray>()
-                        for (f in steamCloud.listFiles(appId)) {
-                            val key = sanitizeRelative(f.remotePath) ?: continue
-                            val sha = f.sha
-                            if (sha.size == SHA1_LEN) m[key] = sha
-                        }
-                        m
-                    } catch (e: Exception) {
-                        Log.w(TAG, "post-upload verification fetch failed for appId=$appId", e)
-                        null
+                // ── HONESTY GUARD 2 (content-verified): did the cloud actually STORE our bytes? ──
+                // A commit ack is not proof. Re-fetch the manifest and require EACH uploaded path to
+                // now report the local file's SHA-1. Mere non-emptiness is NOT enough - a game that
+                // already had a cloud file would otherwise report success while the cloud still held
+                // the OLD save (the reported bug).
+                // This runs whenever ANY file landed (uploaded > 0), NOT only when allOk: a partial
+                // upload that provably put at least one file in the cloud is still SUCCESS even if some
+                // per-file commits failed. Fetch once; reused for both the per-path verification and
+                // the empty-manifest no-retention signal (no third round-trip, no transient disagreement).
+                val remoteShaByPath: Map<String, ByteArray>? = if (uploaded.get() == 0) null else try {
+                    val m = HashMap<String, ByteArray>()
+                    for (f in steamCloud.listFiles(appId)) {
+                        val key = sanitizeRelative(f.remotePath) ?: continue
+                        val sha = f.sha
+                        if (sha.size == SHA1_LEN) m[key] = sha
                     }
+                    m
+                } catch (e: Exception) {
+                    Log.w(TAG, "post-upload verification fetch failed for appId=$appId", e)
+                    null
+                }
 
-                    // `unverified` is derived from `uploaded`, NOT from the bad count, so ANY path that
-                    // wasn't positively verified counts as unverified even if it never made it into
-                    // `uploadedShas` (sanitizeRelative null / sha1 threw). This keeps
-                    // verified + unverified == uploaded.get() always, so onDone is reachable only when
-                    // every uploaded file was positively verified.
-                    val verified: Int
-                    val unverified: Int
-                    if (uploaded.get() == 0) {
-                        verified = 0
-                        unverified = 0
-                    } else if (remoteShaByPath == null) {
-                        verified = 0
-                        unverified = uploaded.get()
-                    } else {
-                        var ok = 0
-                        for ((key, sha) in uploadedShas) {
-                            val remote = remoteShaByPath[key]
-                            if (remote != null && remote.contentEquals(sha)) ok++
-                        }
-                        verified = ok
-                        unverified = uploaded.get() - verified
-                    }
-
-                    if (uploaded.get() > 0 && verified == 0 && unverified == uploaded.get() &&
-                        remoteShaByPath != null && remoteShaByPath.isEmpty()) {
-                        // Nothing at all is in the cloud after a committed >0 upload → no retention.
-                        SaveSyncStore.markNoSteamCloud(ctx, appId)
-                        cb.onError(NO_RETENTION_MESSAGE)
-                    } else if (verified > 0) {
-                        // At least one file landed → SUCCESS. Most games have a single changed save;
-                        // skipping/deduping the rest is fine (the cloud already holds them).
-                        val extra = if (unverified > 0) "; $unverified already in cloud or skipped" else ""
-                        cb.onDone("Uploaded $verified of ${uploaded.get()} changed$extra, $upToDate already up-to-date")
-                    } else {
-                        // Nothing verified and the cloud is known non-empty → honest failure.
-                        cb.onError("Uploaded 0 of ${uploaded.get()} changed; no file reached Steam Cloud")
-                    }
+                // `unverified` is derived from `uploaded`, NOT from the bad count, so ANY path that
+                // wasn't positively verified counts as unverified even if it never made it into
+                // `uploadedShas` (sanitizeRelative null / sha1 threw). This keeps
+                // verified + unverified == uploaded.get() always.
+                val verified: Int
+                val unverified: Int
+                if (uploaded.get() == 0) {
+                    verified = 0
+                    unverified = 0
+                } else if (remoteShaByPath == null) {
+                    verified = 0
+                    unverified = uploaded.get()
                 } else {
-                    // A per-file commit failed before verification ran (verified/unverified not in scope).
+                    var ok = 0
+                    for ((key, sha) in uploadedShas) {
+                        val remote = remoteShaByPath[key]
+                        if (remote != null && remote.contentEquals(sha)) ok++
+                    }
+                    verified = ok
+                    unverified = uploaded.get() - verified
+                }
+
+                // ONE decision block for every outcome. A partial upload (verified > 0) is success
+                // REGARDLESS of allOk; only a genuinely empty cloud after a committed upload, or a
+                // cloud that holds none of what we sent, is an error.
+                if (uploaded.get() > 0 && verified == 0 && unverified == uploaded.get() &&
+                    remoteShaByPath != null && remoteShaByPath.isEmpty()) {
+                    // Nothing at all is in the cloud after a committed >0 upload → no retention.
+                    SaveSyncStore.markNoSteamCloud(ctx, appId)
+                    cb.onError(NO_RETENTION_MESSAGE)
+                } else if (verified > 0) {
+                    // At least one file landed → SUCCESS, even if some per-file commits failed. Most
+                    // games have a single changed save; skipping/deduping the rest is fine (the cloud
+                    // already holds them).
+                    val extra = if (unverified > 0) "; $unverified already in cloud or skipped" else ""
+                    cb.onDone("Uploaded $verified of ${uploaded.get()} changed$extra, $upToDate already up-to-date")
+                } else if (allOk.get()) {
+                    // Every commit acked, yet nothing verified and the cloud is known non-empty →
+                    // honest failure (the cloud kept none of our bytes).
+                    cb.onError("Uploaded 0 of ${uploaded.get()} changed; no file reached Steam Cloud")
+                } else {
+                    // A per-file commit failed AND verification proved nothing landed → honest failure.
                     cb.onError("Uploaded ${uploaded.get()} of ${toUpload.size} changed; some files failed")
                 }
             } catch (e: Exception) {

@@ -49,7 +49,7 @@ public class PartialUploadAcceptGuardTest {
     public void partialUploadWithAtLeastOneVerifiedIsSuccess() throws IOException {
         String src = readRepoFile("src", "main", "java", "com", "winlator", "star", "store", "SteamCloudSaveManager.kt");
         String b = body(src, "fun uploadSaves(");
-        assertTrue("verified>0 must be reported as success", b.contains("verified > 0"));
+        assertTrue("verified>0 branch present", b.contains("else if (verified > 0)"));
         assertTrue("the partial-success branch must use onDone", b.contains("onDone(\"Uploaded $verified"));
         assertTrue("the blanket 'did not reach Steam Cloud' error must be removed",
                 !b.contains("did not reach Steam Cloud"));
