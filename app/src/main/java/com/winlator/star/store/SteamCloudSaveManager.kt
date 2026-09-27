@@ -271,16 +271,18 @@ object SteamCloudSaveManager {
                     return@Thread
                 }
 
-                // Upload the batch's files CONCURRENTLY (bounded pool) — WITHIN the single open
-                // batch. Only the per-file uploadOne is parallelized (its own beginFileUpload +
-                // block PUTs over its own HttpURLConnection(s) + commitFileUpload, all jobid-keyed);
-                // the batch begin/complete calls stay single and sequential around this loop.
                 val uploaded = AtomicInteger(0)
                 val allOk = AtomicBoolean(true)
                 // What we actually uploaded and the content we expect to find remotely, for the
-                // post-upload verification below. Concurrent map: the loop runs on a bounded pool.
+                // post-upload verification below. Concurrent map kept as-is (harmless): the upload
+                // loop below is sequential now.
                 val uploadedShas = ConcurrentHashMap<String, ByteArray>()
-                runConcurrently(toUpload, "steam-cloud-ul-$appId") { (file, cloudPath) ->
+                // Upload the batch's files SEQUENTIALLY (WinNative parity). The per-file protocol is
+                // beginFileUpload -> block PUTs -> commitFileUpload against ONE open batch; interleaving
+                // those across a thread pool was a suspect for commits that never landed. One file at a
+                // time, same order as the batch's file list.
+                for (entry in toUpload) {
+                    val (file, cloudPath) = entry
                     try {
                         cb.onStatus("Uploading: ${file.name}")
                         if (steamCloud.uploadOne(appId, file, cloudPath, batchId)) {

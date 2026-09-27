@@ -203,6 +203,11 @@ class JavaSteamCloudBackend(private val sc: SteamCloud) : SteamCloudBackend {
         val info = sc.beginFileUpload(
             appId = appId, fileSize = fileSize, rawFileSize = fileSize, fileSha = sha,
             timestamp = Date(file.lastModified()), filename = cloudPath, uploadBatchId = batchId,
+            // WinNative parity: do NOT offer client-side encryption. JavaSteam defaults canEncrypt to
+            // true, but this upload sends the RAW bytes and never acts on the response's encrypt_file,
+            // so if Steam asked for encryption the commit would verify ciphertext against a raw SHA
+            // and reject it (file_committed=false) while the block PUTs still returned 200.
+            canEncrypt = false,
         ).get(FUTURE_TIMEOUT_SEC, TimeUnit.SECONDS)
 
         var ok = true
@@ -241,9 +246,15 @@ class JavaSteamCloudBackend(private val sc: SteamCloud) : SteamCloudBackend {
             }
         }
         // Commit tells the CM whether the transfer for this file succeeded. This does not delete
-        // anything; on failure the CM simply drops this file's pending upload.
-        sc.commitFileUpload(ok, appId, sha, cloudPath).get(FUTURE_TIMEOUT_SEC, TimeUnit.SECONDS)
-        return ok
+        // anything; on failure the CM simply drops this file's pending upload. WinNative parity: the
+        // commit's `file_committed` is authoritative — the block PUTs returning 200 only means the CDN
+        // accepted the bytes, NOT that Steam stored them. Read it and report it.
+        val committed = sc.commitFileUpload(ok, appId, sha, cloudPath)
+            .get(FUTURE_TIMEOUT_SEC, TimeUnit.SECONDS)
+        if (ok && !committed) {
+            Log.w(TAG, "Block upload succeeded but Steam did NOT commit $cloudPath (file_committed=false)")
+        }
+        return ok && committed
     }
 
     override fun completeBatch(appId: Int, batchId: Long, allOk: Boolean) {
