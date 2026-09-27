@@ -90,6 +90,22 @@ object SteamPrefs {
         prefs.edit().putString(K_GOLDBERG_PREFIX + appId, mode.name).apply()
     }
 
+    // ── Steam Input (gbe_fork SteamController/SteamInput emulation) ───────────
+    // Per-game opt-in for the Goldberg (gbe_fork) path: when on, the launcher writes the
+    // game's action-set files into steam_settings/controller/ so games that query ISteamInput
+    // get a pad. Keyed by appId like goldbergMode, so it survives session changes.
+
+    private const val K_STEAM_INPUT_PREFIX = "steam_input_"
+
+    /** True if the user opted this game into gbe_fork Steam Input emulation. Default false. */
+    fun getUseSteamInput(appId: Int): Boolean =
+        prefs.getBoolean(K_STEAM_INPUT_PREFIX + appId, false)
+
+    /** Persist the per-game Steam Input opt-in. */
+    fun setUseSteamInput(appId: Int, v: Boolean) {
+        prefs.edit().putBoolean(K_STEAM_INPUT_PREFIX + appId, v).apply()
+    }
+
     // ── DLC picker: per-game EXCLUDED DLC (opt-out) ──────────────────────────
     // Owned DLC downloads with the game by default; the picker lets the user opt
     // OUT of specific DLC. We store the excluded set (CSV of DLC appIds) rather
