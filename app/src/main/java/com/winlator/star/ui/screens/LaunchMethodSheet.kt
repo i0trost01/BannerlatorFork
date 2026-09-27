@@ -141,7 +141,8 @@ private const val HELP_RAW =
         "want the game to start."
 private const val HELP_PASS =
     "For classic games (Half-Life 2, CS:S) that ignore a controller in Real-Steam mode. Hands the pad " +
-        "straight to the game instead of Steam Input. SteamLite only."
+        "straight to the game instead of Steam Input. SteamLite only, and ignored while 'Use Steam Input' " +
+        "is on."
 private const val HELP_VAC =
     "On: the game must be started by Steam itself (VAC-secure). If Steam can't, you get a warning and " +
         "up to ~60 s of waiting before a direct start. Off: the game has no VAC, so a direct start after " +
@@ -159,8 +160,9 @@ private const val HELP_GOLDBERG_MODE =
     "Regular suits most games. Experimental turns on newer features for games Regular can't run. " +
         "ColdClient runs the game's own launcher (heaviest). Try Regular first."
 private const val HELP_STEAM_INPUT =
-    "Goldberg-only, experimental. Makes the emulated Steam answer games that use the Steam Input API, " +
-        "so their actions get a pad. Requires the Experimental Goldberg mode. Ignored by SteamLite/Raw."
+    "Makes Steam answer games that use the Steam Input API, so their actions get a pad. On SteamLite it " +
+        "turns on automatically for games that ship their own Steam Input layout (e.g. Monster Train 2); " +
+        "flip it on for others. On Goldberg it needs the Experimental Goldberg mode."
 
 /**
  * The launch-method chooser popup — a COMPACT centered dialog that pops before a game launches. It is
@@ -436,7 +438,7 @@ private fun PortraitCard(
                     Spacer(Modifier.height(2.dp))
                     OptionsBlock(
                         shortcut, isSteam, hasDetails, passthrough, onPassthrough,
-                        showSteamInput = method == LaunchMethod.GOLDBERG,
+                        showSteamInput = method == LaunchMethod.GOLDBERG || method == LaunchMethod.STEAMLITE,
                         steamInput, onSteamInput,
                         secureLaunch, onSecureLaunch, detectedVac,
                         rememberChoice, onRemember, accent, toggleHelp, openDetails, compact = false,
@@ -544,7 +546,7 @@ private fun LandscapeCard(
                         HorizontalDivider(color = cs.outline)
                         OptionsBlock(
                             shortcut, isSteam, hasDetails, passthrough, onPassthrough,
-                            showSteamInput = method == LaunchMethod.GOLDBERG,
+                            showSteamInput = method == LaunchMethod.GOLDBERG || method == LaunchMethod.STEAMLITE,
                             steamInput, onSteamInput,
                             secureLaunch, onSecureLaunch, detectedVac,
                             rememberChoice, onRemember, accent, toggleHelp, openDetails, compact = true,
@@ -714,7 +716,7 @@ private fun ColumnScope.OptionsBlock(
         OptionRow(
             title = "Use Steam Input",
             badge = "NEW",
-            subtitle = if (compact) null else "gbe_fork answers the game's Steam Input actions. Experimental; needs the Experimental Goldberg mode.",
+            subtitle = if (compact) null else "Answers games that use the Steam Input API. Auto-on for games with their own layout (SteamLite); Experimental Goldberg for the rest.",
             accent = accent,
             compact = compact,
             onHelp = { toggleHelp(HELP_STEAM_INPUT) },
