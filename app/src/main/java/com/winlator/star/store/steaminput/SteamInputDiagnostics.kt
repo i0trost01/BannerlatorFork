@@ -19,7 +19,7 @@ object SteamInputDiagnostics {
     private const val TAG = "BH_STEAM_INPUT"
     private const val GREP_LINES = 200
     private const val RAW_LINES = 1200
-    private const val CLIENT_LOG_TAIL = 50
+    private const val CLIENT_LOG_TAIL = 200
 
     fun report(context: Context, installDir: File?, appId: Int): List<String> {
         val out = ArrayList<String>()
@@ -199,7 +199,7 @@ object SteamInputDiagnostics {
                     out += localConfigSteamInputLines(runCatching { lc.readText() }.getOrDefault(""), appId)
                 }
             }
-            out += clientControllerSection(steamDir)
+            out += clientControllerSection(context, steamDir)
             out += "===== END STEAM INPUT DIAG ====="
         } catch (t: Throwable) {
             out += "steam-input RealSteam diag failed: $t"
@@ -249,15 +249,37 @@ object SteamInputDiagnostics {
      * inventory plus the tail of any controller/input/launch log, and the Controller lines of
      * {@code config/config.vdf}. Readable from logcat on a device with no root.
      */
-    private fun clientControllerSection(steamDir: File): List<String> {
+    private fun clientControllerSection(context: Context, steamDir: File): List<String> {
         val out = ArrayList<String>()
         val logs = File(steamDir, "logs")
         val files = logs.listFiles()?.filter { it.isFile }?.sortedBy { it.name } ?: emptyList()
         out += "client logs/${files.size}: ${files.joinToString(", ") { it.name }}"
+
+        // Mirror the controller-relevant client files where ADB can read them (the device has no root
+        // and the prefix is app-private), so the full logs can be pulled without a logcat size cap.
+        try {
+            val ext = context.getExternalFilesDir(null)
+            if (ext != null && (ext.isDirectory || ext.mkdirs())) {
+                for (name in listOf("controller.txt", "gameprocess_log.txt", "configstore_log.txt")) {
+                    val src = File(logs, name)
+                    if (src.isFile) runCatching { File(ext, "client_$name").writeText(src.readText()) }
+                }
+                val cfgRoot = File(steamDir, "steamapps/common/Steam Controller Configs")
+                val listing = buildString {
+                    runCatching {
+                        cfgRoot.walkTopDown().maxDepth(4).forEach { f ->
+                            if (f.isFile) append(f.absolutePath).append(' ').append(f.length()).append('\n')
+                        }
+                    }
+                }
+                runCatching { File(ext, "client_configsets.txt").writeText(listing) }
+            }
+        } catch (_: Throwable) {}
+
         for (f in files) {
             val n = f.name.lowercase()
             if (!(n.contains("controller") || n.contains("input") || n == "gameprocess_log.txt")) continue
-            if (f.length() > 1_000_000) {
+            if (f.length() > 2_000_000) {
                 out += "----- ${f.name} (${f.length()}B) too large to tail -----"
                 continue
             }
@@ -265,6 +287,14 @@ object SteamInputDiagnostics {
             out += runCatching { f.readLines().takeLast(CLIENT_LOG_TAIL) }
                 .getOrDefault(listOf("(unreadable)"))
         }
+
+        // The config sets the client has for this account — where app bindings actually come from.
+        val cfgRoot = File(steamDir, "steamapps/common/Steam Controller Configs")
+        val cfgFiles = runCatching {
+            cfgRoot.walkTopDown().maxDepth(4).filter { it.isFile }.take(40).toList()
+        }.getOrDefault(emptyList())
+        out += "config sets/${cfgFiles.size}: ${cfgFiles.joinToString(", ") { it.name }}"
+
         val config = File(steamDir, "config/config.vdf")
         if (config.isFile) {
             val hits = runCatching {
