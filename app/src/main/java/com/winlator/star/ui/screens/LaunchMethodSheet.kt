@@ -158,6 +158,9 @@ private const val HELP_STEAMLITE_CLIENT =
 private const val HELP_GOLDBERG_MODE =
     "Regular suits most games. Experimental turns on newer features for games Regular can't run. " +
         "ColdClient runs the game's own launcher (heaviest). Try Regular first."
+private const val HELP_STEAM_INPUT =
+    "Goldberg-only, experimental. Makes the emulated Steam answer games that use the Steam Input API, " +
+        "so their actions get a pad. Requires the Experimental Goldberg mode. Ignored by SteamLite/Raw."
 
 /**
  * The launch-method chooser popup — a COMPACT centered dialog that pops before a game launches. It is
@@ -220,6 +223,11 @@ fun LaunchMethodSheet(
     }
     var rememberChoice by remember(shortcut) { mutableStateOf(shortcut.getExtra("launchModeRemembered", "") == "1") }
     var controllerPassthrough by remember(shortcut) { mutableStateOf(shortcut.getExtra("controllerPassthrough", "") == "1") }
+    // "Use Steam Input" (Goldberg only). Seeded from the per-game pref; toggling persists immediately,
+    // so a later Cancel still keeps the choice (accepted behaviour).
+    var steamInput by remember(shortcut) {
+        mutableStateOf(if (appId > 0) SteamPrefs.getUseSteamInput(appId) else false)
+    }
     // "Requires secure (VAC) launch" (SteamLite only). Seeded from the saved override, else from the
     // VAC marker the library sync recorded from PICS app-info (loaded off-main). Persisted only once the
     // user touches it, so an untouched toggle keeps following the detection.
@@ -239,6 +247,10 @@ fun LaunchMethodSheet(
     // The active "?" help bubble (null = none). Keyed on the shortcut so it resets per game.
     var helpText by remember(shortcut) { mutableStateOf<String?>(null) }
     val toggleHelp: (String) -> Unit = { helpText = if (helpText == it) null else it }
+    val onSteamInput: (Boolean) -> Unit = { v ->
+        steamInput = v
+        if (appId > 0) SteamPrefs.setUseSteamInput(appId, v)
+    }
 
     val doLaunch: () -> Unit = {
         onLaunch(
@@ -311,6 +323,7 @@ fun LaunchMethodSheet(
                 shortcut, source, appId, isSteam, hasDetails, enabledMethods, accent,
                 method, { method = it }, goldbergMode, { goldbergMode = it },
                 rememberChoice, { rememberChoice = it }, controllerPassthrough, { controllerPassthrough = it },
+                steamInput, onSteamInput,
                 secureLaunch, { secureLaunch = it; vacTouched = true }, detectedVac,
                 helpText, toggleHelp, { helpText = null }, onDismiss, doLaunch, openDetails,
                 onVerifyFiles, onUpdateFiles, steamLiteClient,
@@ -320,6 +333,7 @@ fun LaunchMethodSheet(
                 shortcut, source, appId, isSteam, hasDetails, enabledMethods, accent,
                 method, { method = it }, goldbergMode, { goldbergMode = it },
                 rememberChoice, { rememberChoice = it }, controllerPassthrough, { controllerPassthrough = it },
+                steamInput, onSteamInput,
                 secureLaunch, { secureLaunch = it; vacTouched = true }, detectedVac,
                 helpText, toggleHelp, { helpText = null }, onDismiss, doLaunch, openDetails,
                 onVerifyFiles, onUpdateFiles, steamLiteClient,
@@ -347,6 +361,8 @@ private fun PortraitCard(
     onRemember: (Boolean) -> Unit,
     passthrough: Boolean,
     onPassthrough: (Boolean) -> Unit,
+    steamInput: Boolean,
+    onSteamInput: (Boolean) -> Unit,
     secureLaunch: Boolean,
     onSecureLaunch: (Boolean) -> Unit,
     detectedVac: Boolean?,
@@ -420,6 +436,8 @@ private fun PortraitCard(
                     Spacer(Modifier.height(2.dp))
                     OptionsBlock(
                         shortcut, isSteam, hasDetails, passthrough, onPassthrough,
+                        showSteamInput = method == LaunchMethod.GOLDBERG,
+                        steamInput, onSteamInput,
                         secureLaunch, onSecureLaunch, detectedVac,
                         rememberChoice, onRemember, accent, toggleHelp, openDetails, compact = false,
                     )
@@ -459,6 +477,8 @@ private fun LandscapeCard(
     onRemember: (Boolean) -> Unit,
     passthrough: Boolean,
     onPassthrough: (Boolean) -> Unit,
+    steamInput: Boolean,
+    onSteamInput: (Boolean) -> Unit,
     secureLaunch: Boolean,
     onSecureLaunch: (Boolean) -> Unit,
     detectedVac: Boolean?,
@@ -524,6 +544,8 @@ private fun LandscapeCard(
                         HorizontalDivider(color = cs.outline)
                         OptionsBlock(
                             shortcut, isSteam, hasDetails, passthrough, onPassthrough,
+                            showSteamInput = method == LaunchMethod.GOLDBERG,
+                            steamInput, onSteamInput,
                             secureLaunch, onSecureLaunch, detectedVac,
                             rememberChoice, onRemember, accent, toggleHelp, openDetails, compact = true,
                         )
@@ -637,6 +659,9 @@ private fun ColumnScope.OptionsBlock(
     hasDetails: Boolean,
     passthrough: Boolean,
     onPassthrough: (Boolean) -> Unit,
+    showSteamInput: Boolean,
+    steamInput: Boolean,
+    onSteamInput: (Boolean) -> Unit,
     secureLaunch: Boolean,
     onSecureLaunch: (Boolean) -> Unit,
     detectedVac: Boolean?,
@@ -683,6 +708,17 @@ private fun ColumnScope.OptionsBlock(
             compact = compact,
             onHelp = { toggleHelp(HELP_VAC) },
             trailing = { PillSwitch(secureLaunch, accent, onSecureLaunch) },
+        )
+    }
+    if (showSteamInput) {
+        OptionRow(
+            title = "Use Steam Input",
+            badge = "NEW",
+            subtitle = if (compact) null else "gbe_fork answers the game's Steam Input actions. Experimental; needs the Experimental Goldberg mode.",
+            accent = accent,
+            compact = compact,
+            onHelp = { toggleHelp(HELP_STEAM_INPUT) },
+            trailing = { PillSwitch(steamInput, accent, onSteamInput) },
         )
     }
     OptionRow(
