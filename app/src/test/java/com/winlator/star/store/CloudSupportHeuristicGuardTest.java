@@ -70,7 +70,8 @@ public class CloudSupportHeuristicGuardTest {
         String src = readRepoFile("src", "main", "java", "com", "winlator", "star", "store", "SteamCloudSaveManager.kt");
         String b = body(src, "private fun hasUsableSaveFiles(");
         assertFalse("must not test a bare \".\" as content", b.contains("value == \".\""));
-        assertTrue("must normalize \".\"/\"/\" to empty before blank-checks", b.contains("trim"));
+        assertTrue("must normalize \".\"/\"/\" to empty before blank-checks",
+                b.contains("trim('/')"));
     }
 
     @Test
@@ -79,8 +80,11 @@ public class CloudSupportHeuristicGuardTest {
         String b = body(src, "fun hasCloudSupport(");
         assertTrue("must gate the false verdict on an actual ufs block being present",
                 b.contains("get(\"ufs\")"));
-        assertTrue("must return null (unknown) for an unrecognized shape", b.contains("null"));
-        assertTrue("must only cache a definitive verdict (never null)",
-                b.contains("cloudSupportCache[appId] = "));
+        assertTrue("must return unknown (null) for an unrecognized/absent ufs block",
+                b.contains("ufs.children.isEmpty()"));
+        assertTrue("must treat blank quota/maxnumfiles as unrecognized",
+                b.contains("isNullOrBlank()"));
+        assertTrue("must only cache a verdict computed from the usable-savefiles check",
+                b.contains("cloudSupportCache[appId] = ") && b.contains("hasUsableSaveFiles("));
     }
 }
