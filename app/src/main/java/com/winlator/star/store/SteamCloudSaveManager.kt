@@ -349,14 +349,20 @@ object SteamCloudSaveManager {
 
                     if (uploaded.get() > 0 && verified == 0 && unverified == uploaded.get() &&
                         remoteShaByPath != null && remoteShaByPath.isEmpty()) {
+                        // Nothing at all is in the cloud after a committed >0 upload → no retention.
                         SaveSyncStore.markNoSteamCloud(ctx, appId)
                         cb.onError(NO_RETENTION_MESSAGE)
-                    } else if (unverified > 0) {
-                        cb.onError("Uploaded $verified of ${uploaded.get()} changed; $unverified did not reach Steam Cloud")
+                    } else if (verified > 0) {
+                        // At least one file landed → SUCCESS. Most games have a single changed save;
+                        // skipping/deduping the rest is fine (the cloud already holds them).
+                        val extra = if (unverified > 0) "; $unverified already in cloud or skipped" else ""
+                        cb.onDone("Uploaded $verified of ${uploaded.get()} changed$extra, $upToDate already up-to-date")
                     } else {
-                        cb.onDone("Uploaded ${uploaded.get()} changed, $upToDate already up-to-date")
+                        // Nothing verified and the cloud is known non-empty → honest failure.
+                        cb.onError("Uploaded 0 of ${uploaded.get()} changed; no file reached Steam Cloud")
                     }
                 } else {
+                    // A per-file commit failed before verification ran (verified/unverified not in scope).
                     cb.onError("Uploaded ${uploaded.get()} of ${toUpload.size} changed; some files failed")
                 }
             } catch (e: Exception) {
