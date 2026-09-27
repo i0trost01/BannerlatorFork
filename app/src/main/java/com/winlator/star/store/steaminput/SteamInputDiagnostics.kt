@@ -157,9 +157,11 @@ object SteamInputDiagnostics {
         try {
             SteamPrefs.init(context.applicationContext)
             val toggle = SteamPrefs.getUseSteamInput(appId)
+            val chosen = SteamPrefs.isSteamInputChosen(appId)
             val declared = installDir?.let { SteamInputLayouts.hasOwnManifest(it) } ?: false
             out += "===== STEAM INPUT DIAG / RealSteam (appId=$appId) ====="
-            out += "steamInputEnabled=${toggle || declared}  (toggle=$toggle, ownManifest=$declared)"
+            out += "steamInputEnabled=${SteamPrefs.effectiveUseSteamInput(appId, installDir)}" +
+                "  (toggle=$toggle, chosen=$chosen, ownManifest=$declared)"
             out += "agent BL_AGENT_STEAMINPUT=${agentEnv?.get("BL_AGENT_STEAMINPUT") ?: "(absent)"}"
             out += "installDir=${installDir?.absolutePath ?: "UNRESOLVED"}"
             // The game must run Valve's own steam_api for the genuine client to serve Steam Input;

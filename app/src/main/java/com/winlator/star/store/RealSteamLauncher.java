@@ -255,7 +255,10 @@ public final class RealSteamLauncher {
             } catch (Throwable ignored) {}
             if (steamInput) {
                 applySteamInput(steamDir, repo, appId, new File(hostInstallDir));
-            } else if (controllerPassthrough) {
+            } else if (controllerPassthrough || SteamPrefs.INSTANCE.isSteamInputChosen(appId)) {
+                // An explicit "Use Steam Input = off" must ALSO stop the genuine client from grabbing the
+                // pad (write the SteamController_*Support keys to 0). Without this the keys stay "1" from a
+                // prior run and the off state never takes effect — the client keeps reserving XInput slots.
                 applyControllerPassthrough(steamDir, repo);
             }
 
