@@ -182,6 +182,13 @@ object SteamInputDiagnostics {
             val layout = File(steamDir, "steamhost_controller_$appId.vdf")
             out += "staged ${layout.name}=" +
                 (if (layout.isFile) "OK (${layout.length()} bytes)" else "MISSING")
+            // SDL3.dll is what the client enumerates controllers with; steam.exe arch tells us which copy it loads.
+            val winDir = driveC?.let { File(it, "windows") }
+            out += "SDL3 system32=" + presence(winDir?.let { File(it, "system32/SDL3.dll") }) +
+                " syswow64=" + presence(winDir?.let { File(it, "syswow64/SDL3.dll") }) +
+                " steamDir=" + presence(File(steamDir, "SDL3.dll"))
+            val steamExe = File(steamDir, "steam.exe")
+            out += "steam.exe=" + (if (steamExe.isFile) "${steamExe.length()}B ${peMachine(steamExe)}" else "MISSING")
 
             val localConfigs = findLocalConfigs(steamDir)
             if (localConfigs.isEmpty()) {
@@ -215,6 +222,27 @@ object SteamInputDiagnostics {
                 .take(8)
                 .toList()
         }.getOrDefault(emptyList())
+
+    private fun presence(f: File?): String = if (f != null && f.isFile) "OK(${f.length()}B)" else "MISSING"
+
+    /** PE machine type of a file: "x86", "x64", or "?" when unreadable. */
+    private fun peMachine(f: File): String =
+        runCatching {
+            java.io.RandomAccessFile(f, "r").use { raf ->
+                raf.seek(0x3C)
+                val b = ByteArray(4); raf.readFully(b)
+                val pe = (b[0].toInt() and 0xFF) or ((b[1].toInt() and 0xFF) shl 8) or
+                    ((b[2].toInt() and 0xFF) shl 16) or ((b[3].toInt() and 0xFF) shl 24)
+                raf.seek(pe.toLong() + 4)
+                val m = ByteArray(2); raf.readFully(m)
+                val machine = (m[0].toInt() and 0xFF) or ((m[1].toInt() and 0xFF) shl 8)
+                when (machine) {
+                    0x8664 -> "x64"
+                    0x14c -> "x86"
+                    else -> "m=0x%04x".format(machine)
+                }
+            }
+        }.getOrDefault("?")
 
     /**
      * What the genuine Steam client itself says about controllers/Steam Input: its {@code logs/}

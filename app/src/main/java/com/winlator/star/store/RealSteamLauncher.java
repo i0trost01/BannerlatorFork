@@ -237,6 +237,11 @@ public final class RealSteamLauncher {
             //    DInput on the launch) is applied by the caller. Best-effort: any failure here is
             //    logged and swallowed so passthrough can never block a launch. Runs AFTER staging so
             //    a re-staged overlay DLL is removed again. No-op (byte-unchanged) when the toggle is off.
+            // Stage Valve's SDL3.dll so the genuine client can enumerate controllers — without it the
+            // client logs "CHIDDeviceListSDL(): Couldn't load SDL3.dll, not enumerating devices" and
+            // Steam Input hands the game nothing. Unconditional for RealSteam (see stageSdl3).
+            stageSdl3(ctx, driveC, steamDir);
+
             // A game that ships its OWN Steam Input action manifest hands input to Steam Input and gets
             // nothing while the client keeps the pad to itself — enable Steam Input for it instead of
             // stepping aside. Same decision + localconfig shape as GameNative (isSteamInputEnabled /
@@ -541,6 +546,46 @@ public final class RealSteamLauncher {
             }
         } catch (Throwable t) {
             Log.w(TAG, "steaminput: layout staging failed (non-fatal): " + t.getMessage());
+        }
+    }
+
+    // ── SDL3.dll (controller enumeration) ──────────────────────────────────────────────────────────
+
+    /**
+     * Stage Valve's Windows SDL3.dll where the genuine client loads it. The client enumerates pads via
+     * {@code CHIDDeviceListSDL} and logs "Couldn't load SDL3.dll, not enumerating devices" without it —
+     * with zero controllers, Steam Input hands a game nothing (Monster Train 2). The SteamLite package
+     * does not carry it; SDL3 is zlib-licensed and its release DLL needs no MSVC runtime (static CRT),
+     * so we ship it. Placed arch-correct in the Wine system dirs (so a 64-bit loader still gets x64)
+     * and, for the 32-bit client exe, beside the client. Idempotent; best-effort — never blocks a launch.
+     */
+    private static void stageSdl3(Context ctx, File driveC, File steamDir) {
+        if (driveC == null || steamDir == null) return;
+        try {
+            File win = new File(driveC, "windows");
+            copyAssetIfMissing(ctx, "steaminput/SDL3.x64.dll", new File(win, "system32/SDL3.dll"));
+            copyAssetIfMissing(ctx, "steaminput/SDL3.x86.dll", new File(win, "syswow64/SDL3.dll"));
+            copyAssetIfMissing(ctx, "steaminput/SDL3.x86.dll", new File(steamDir, "SDL3.dll"));
+        } catch (Throwable t) {
+            Log.w(TAG, "sdl3: staging failed (non-fatal): " + t.getMessage());
+        }
+    }
+
+    /** Copy an asset to [dest] unless it is already there, logging the result. Never throws. */
+    private static void copyAssetIfMissing(Context ctx, String asset, File dest) {
+        try {
+            if (dest.isFile() && dest.length() > 0) return;
+            File dir = dest.getParentFile();
+            if (dir != null && !dir.exists()) dir.mkdirs();
+            try (java.io.InputStream in = ctx.getAssets().open(asset);
+                 java.io.OutputStream out = new java.io.FileOutputStream(dest)) {
+                byte[] buf = new byte[64 * 1024];
+                int n;
+                while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+            }
+            Log.i(TAG, "sdl3: staged " + dest.getAbsolutePath() + " (" + dest.length() + " bytes)");
+        } catch (Throwable t) {
+            Log.w(TAG, "sdl3: couldn't stage " + asset + " -> " + dest + ": " + t.getMessage());
         }
     }
 
