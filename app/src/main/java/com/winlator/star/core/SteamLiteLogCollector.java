@@ -72,6 +72,7 @@ public final class SteamLiteLogCollector {
             { "cloud_log.txt",          "cloud saves" },
             { "stats_log.txt",          "achievements" },
             { "shader_log.txt",         "shader cache" },
+            { "controller.txt",         "controller / Steam Input" },
     };
 
     private SteamLiteLogCollector() {}

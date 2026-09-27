@@ -563,18 +563,21 @@ public final class RealSteamLauncher {
         if (driveC == null || steamDir == null) return;
         try {
             File win = new File(driveC, "windows");
-            copyAssetIfMissing(ctx, "steaminput/SDL3.x64.dll", new File(win, "system32/SDL3.dll"));
-            copyAssetIfMissing(ctx, "steaminput/SDL3.x86.dll", new File(win, "syswow64/SDL3.dll"));
-            copyAssetIfMissing(ctx, "steaminput/SDL3.x86.dll", new File(steamDir, "SDL3.dll"));
+            // The client is 64-bit (steam.exe PE machine x64) and LoadLibrary searches the exe's OWN
+            // dir FIRST — so a 32-bit SDL3.dll beside it shadows the correct one and fails to load
+            // ("Couldn't load SDL3.dll"). Put x64 there; the system dirs get the arch-correct copy for
+            // any other loader. Copied unconditionally so a stale wrong-arch file is replaced.
+            stageAsset(ctx, "steaminput/SDL3.x64.dll", new File(win, "system32/SDL3.dll"));
+            stageAsset(ctx, "steaminput/SDL3.x86.dll", new File(win, "syswow64/SDL3.dll"));
+            stageAsset(ctx, "steaminput/SDL3.x64.dll", new File(steamDir, "SDL3.dll"));
         } catch (Throwable t) {
             Log.w(TAG, "sdl3: staging failed (non-fatal): " + t.getMessage());
         }
     }
 
-    /** Copy an asset to [dest] unless it is already there, logging the result. Never throws. */
-    private static void copyAssetIfMissing(Context ctx, String asset, File dest) {
+    /** Copy an asset over [dest] (creating parent dirs), logging the result. Never throws. */
+    private static void stageAsset(Context ctx, String asset, File dest) {
         try {
-            if (dest.isFile() && dest.length() > 0) return;
             File dir = dest.getParentFile();
             if (dir != null && !dir.exists()) dir.mkdirs();
             try (java.io.InputStream in = ctx.getAssets().open(asset);
