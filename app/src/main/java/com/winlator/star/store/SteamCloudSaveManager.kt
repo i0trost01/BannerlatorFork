@@ -357,9 +357,17 @@ object SteamCloudSaveManager {
             if (appKeyValues == null || appKeyValues.children.isEmpty()) {
                 null
             } else {
-                val supported = hasUsableSaveFiles(appKeyValues)
-                cloudSupportCache[appId] = supported
-                supported
+                // Only a PRESENT ufs block can prove anything. Absent/unrecognized => unknown (null),
+                // never a cached false: upload will fall back to the live-manifest check instead.
+                val ufs = appKeyValues.get("ufs")
+                if (ufs.children.isEmpty() && ufs.get("quota").value.isNullOrBlank() &&
+                    ufs.get("maxnumfiles").value.isNullOrBlank()) {
+                    null
+                } else {
+                    val supported = hasUsableSaveFiles(appKeyValues)
+                    cloudSupportCache[appId] = supported
+                    supported
+                }
             }
         } catch (e: Exception) {
             Log.w(TAG, "hasCloudSupport: PICS product-info query failed for appId=$appId", e)
@@ -367,14 +375,27 @@ object SteamCloudSaveManager {
         }
     }
 
-    /** True if the app's PICS KeyValues declare at least one usable UFS save-file pattern. Navigates
-     *  `ufs/savefiles` (case-insensitive; [KeyValue.get] returns the INVALID sentinel — never null —
-     *  when a key is absent, so missing sections yield an empty child list ⇒ false). A pattern counts
-     *  as usable if it carries a non-blank `root` or `pattern`. */
+    /** True if the app's PICS KeyValues declare a usable cloud-save configuration.
+     *
+     *  Steam declares cloud config two ways, both under `ufs`:
+     *   - legacy UFS: `ufs/savefiles/<n>/{root,path,pattern}`;
+     *   - Auto-Cloud: entries may carry a `root` + `path`/`addpath` but no `pattern`, and a `path`
+     *     of "." or "/" means "root of this type, no subdir" (normalize to empty - GameNative #1297).
+     *  The `ufs` block itself also carries `quota`/`maxnumfiles` when cloud is configured.
+     *
+     *  An entry counts as usable if any of root/path/addpath/pattern is non-blank after normalizing
+     *  dots/slashes. `KeyValue.get` never returns null (INVALID sentinel) and `.children` is empty
+     *  when a section is absent. */
     private fun hasUsableSaveFiles(appKeyValues: KeyValue): Boolean {
-        val saveFiles = appKeyValues.get("ufs").get("savefiles").children
-        return saveFiles.any { entry ->
-            !entry.get("root").value.isNullOrBlank() || !entry.get("pattern").value.isNullOrBlank()
+        fun String?.usable(): Boolean {
+            val v = this?.trim()?.trim('/') ?: return false
+            return v.isNotBlank() && v != "."
+        }
+        val ufs = appKeyValues.get("ufs")
+        if (ufs.get("quota").value.usable() || ufs.get("maxnumfiles").value.usable()) return true
+        return ufs.get("savefiles").children.any { entry ->
+            entry.get("root").value.usable() || entry.get("pattern").value.usable() ||
+                entry.get("path").value.usable() || entry.get("addpath").value.usable()
         }
     }
 
