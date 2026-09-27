@@ -457,6 +457,14 @@ fun BigPictureScreen(navController: NavController) {
                 // A remembered RealSteam pick still runs the SteamLite pre-flight (session check).
                 remembered && sc.getExtra("launchMode", "") == "RealSteam" && isSteamOriginShortcut(sc) ->
                     launchWithSteamLite(sc)
+                // A remembered Goldberg pick must re-apply the Goldberg tier (dlls + gbe_fork controller
+                // files) before the container opens — the launch pipeline never patches. Route it through
+                // launchWithGoldberg exactly like the popup's Goldberg branch; a remembered Raw pick stays
+                // a plain launch.
+                remembered && sc.getExtra("launchMode", "") == "Goldberg" -> {
+                    SteamPrefs.init(context)
+                    launchWithGoldberg(sc, SteamPrefs.getGoldbergMode(steamAppIdOf(sc)))
+                }
                 remembered -> launchShortcut(activity, sc)
                 else -> launchChoiceFor = sc
             }

@@ -536,6 +536,14 @@ fun ShortcutsScreen(vm: ShortcutsViewModel = viewModel()) {
         when {
             remembered && shortcut.getExtra("launchMode", "") == "RealSteam" && isSteamOriginShortcut(shortcut) ->
                 launchWithSteamLite(shortcut)
+            // A remembered Goldberg pick must re-apply the Goldberg tier (dlls + gbe_fork controller
+            // files) before the container opens — the launch pipeline never patches. Route it through
+            // launchWithGoldberg exactly like the popup's Goldberg branch; a remembered Raw pick stays
+            // a plain launch.
+            remembered && shortcut.getExtra("launchMode", "") == "Goldberg" -> {
+                SteamPrefs.init(context)
+                launchWithGoldberg(shortcut, SteamPrefs.getGoldbergMode(steamAppIdOf(shortcut)))
+            }
             remembered -> launchShortcutNow(activity, shortcut)
             else -> launchChoiceFor = shortcut
         }
