@@ -7,15 +7,15 @@ import java.io.File
  * Resolves the controller layout VDF used to build a game's `steam_settings/controller/` files.
  *
  * Precedence:
- *  1. a layout the user/app dropped at `<game>/.bannerlator/steaminput_layout.vdf` (outside
+ *  1. a layout the user/app dropped at `<install>/.bannerlator/steaminput_layout.vdf` (outside
  *     `steam_settings/`, which Goldberg's restore and every OFF apply delete wholesale);
  *  2. the game's OWN Steam Input action manifest (`steam_input_manifest.vdf` shipped in the install,
  *     Unity `…_Data/StreamingAssets/SteamInput/` convention) → its Xbox config VDF — used by games
  *     that hand input to Steam Input (GameNative "template index 13", e.g. Monster Train 2);
  *  3. the bundled identity layout in `assets/steaminput/gamepad.vdf`.
  *
- * `resolve` is called with the steam_api dll's parent directory, which may be a subtree of the
- * install (e.g. `…/x86_64`); [findManifest] therefore searches the directory AND its ancestors.
+ * Discovery is confined to [installRoot] (the game's own directory): searching ancestors or siblings
+ * could match a different game's manifest and silently write the wrong mappings.
  */
 object SteamInputLayouts {
 
@@ -26,25 +26,26 @@ object SteamInputLayouts {
     private const val MANIFEST_NAME = "steam_input_manifest.vdf"
     private val CONTROLLER_TYPES = listOf("controller_xboxone", "controller_xbox360", "controller_generic")
 
-    fun resolve(context: Context, installDir: File): String? =
-        resolve(context, installDir, 0)
-
-    fun resolve(context: Context, installDir: File, appId: Int): String? {
-        val provided = File(installDir, PROVIDED_REL)
+    fun resolve(context: Context, installRoot: File): String? {
+        val provided = File(installRoot, PROVIDED_REL)
             .takeIf { it.isFile }
             ?.let { runCatching { it.readText() }.getOrNull() }
-        val own = resolveOwnManifestConfig(installDir)
+        val own = resolveOwnManifestConfig(installRoot)
         val bundled = runCatching {
             context.assets.open(BUNDLED_ASSET).bufferedReader().use { it.readText() }
         }.getOrNull()
-        return provided ?: own ?: bundled
+        return chooseLayoutSource(provided, own, bundled)
     }
 
-    /** True when the install ships its own Steam Input action manifest (index-13-style game). */
-    fun hasOwnManifest(installDir: File): Boolean = findManifest(installDir) != null
+    /** Pure precedence: provided → the game's own manifest config → the bundled generic. */
+    internal fun chooseLayoutSource(provided: String?, own: String?, bundled: String?): String? =
+        provided ?: own ?: bundled
 
-    private fun resolveOwnManifestConfig(installDir: File): String? {
-        val manifest = findManifest(installDir) ?: return null
+    /** True when the install ships its own Steam Input action manifest. */
+    fun hasOwnManifest(installRoot: File): Boolean = findManifest(installRoot) != null
+
+    internal fun resolveOwnManifestConfig(installRoot: File): String? {
+        val manifest = findManifest(installRoot) ?: return null
         val dir = manifest.parentFile ?: return null
         val text = runCatching { manifest.readText() }.getOrNull() ?: return null
         val rel = pickControllerConfigPath(text) ?: return null
@@ -53,24 +54,13 @@ object SteamInputLayouts {
     }
 
     /**
-     * Finds the game's own Steam Input manifest. Starts at [installDir] (the dll's parent) and walks
-     * up to a few ancestors, checking each for the Unity `StreamingAssets/SteamInput` convention.
+     * Finds the game's own Steam Input manifest, confined to [installRoot]: the root itself and one
+     * level of child directories, using the Unity `StreamingAssets/SteamInput` convention.
      */
-    internal fun findManifest(installDir: File): File? {
-        var root: File? = installDir
-        var up = 0
-        while (root != null && up < 4) {
-            findIn(root)?.let { return it }
-            root = root.parentFile
-            up++
-        }
-        return null
-    }
-
-    private fun findIn(root: File): File? {
-        File(root, "StreamingAssets/SteamInput").firstNamed()?.let { return it }
-        File(root, "SteamInput").firstNamed()?.let { return it }
-        val children = root.listFiles() ?: return null
+    internal fun findManifest(installRoot: File): File? {
+        File(installRoot, "StreamingAssets/SteamInput").firstNamed()?.let { return it }
+        File(installRoot, "SteamInput").firstNamed()?.let { return it }
+        val children = installRoot.listFiles() ?: return null
         for (child in children) {
             if (!child.isDirectory) continue
             File(child, "StreamingAssets/SteamInput").firstNamed()?.let { return it }
@@ -88,14 +78,14 @@ object SteamInputLayouts {
      */
     internal fun pickControllerConfigPath(manifestText: String): String? {
         val lines = manifestText.lines()
+        val pathRe = Regex("\"path\"\\s+\"([^\"]+)\"")
         for (type in CONTROLLER_TYPES) {
-            val start = lines.indexOfFirst { it.contains("\"$type\"") }
+            val start = lines.indexOfFirst { it.trim().startsWith("\"$type\"") }
             if (start < 0) continue
             for (i in start + 1 until lines.size) {
                 val line = lines[i]
-                if (line.contains("\"controller_") && !line.contains("\"path\"")) break
-                val m = Regex("\"path\"\\s+\"([^\"]+)\"").find(line)
-                if (m != null) return m.groupValues[1]
+                if (line.trim().startsWith("\"controller_")) break
+                pathRe.find(line)?.let { return it.groupValues[1] }
             }
         }
         return null

@@ -22,10 +22,11 @@ object SteamInputConfigWriter {
     /** Writes one file per action set. Returns the number of files written; 0 = nothing to do. */
     fun write(installDir: File, vdfText: String): Int {
         val sets = SteamInputVdfConverter.convert(vdfText)
-        if (sets.isEmpty()) return 0
         val dir = File(installDir, CONTROLLER_DIR)
-        // Drop stale action-set files from a previous layout before writing this one.
+        // Reconcile: always drop stale action-set files first, so a layout that yields NO sets cannot
+        // leave a previous set behind, and a new layout never mixes with the old one.
         dir.takeIf { it.isDirectory }?.deleteRecursively()
+        if (sets.isEmpty()) return 0
         dir.mkdirs()
         var written = 0
         for ((setName, content) in sets) {

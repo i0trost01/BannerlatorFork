@@ -158,7 +158,7 @@ object GoldbergPatcher {
         // no harm before a restore).
         sharedPrep(context, targets, appId)
 
-        applySteamInput(context, appId, targets)
+        applySteamInput(context, appId, root, targets)
 
         // GOLDEN RULE: always restore pristine dlls from .bak first, so switching
         // tiers never stacks Goldberg dlls on top of each other.
@@ -398,16 +398,16 @@ object GoldbergPatcher {
      * Writes or clears the gbe_fork Steam Input action-set files for this game based on the
      * per-game preference. Best-effort: never throws into the launch path.
      */
-    private fun applySteamInput(context: Context, appId: Int, targets: List<PatchTarget>) {
+    private fun applySteamInput(context: Context, appId: Int, root: File, targets: List<PatchTarget>) {
         try {
             val dirs = targets.map { it.dir }.distinct()
             if (dirs.isEmpty()) return
             SteamPrefs.init(context.applicationContext)
             // A game that ships its own Steam Input action manifest hands input to Steam Input, so it
             // needs the action-set files even when the user has not flipped the per-game toggle.
-            val declared = dirs.any { SteamInputLayouts.hasOwnManifest(it) }
+            val declared = SteamInputLayouts.hasOwnManifest(root)
             if (SteamPrefs.getUseSteamInput(appId) || declared) {
-                val vdf = SteamInputLayouts.resolve(context.applicationContext, dirs.first(), appId)
+                val vdf = SteamInputLayouts.resolve(context.applicationContext, root)
                 if (vdf.isNullOrEmpty()) {
                     Log.w(TAG, "steam input: no layout for appId $appId")
                 } else {
