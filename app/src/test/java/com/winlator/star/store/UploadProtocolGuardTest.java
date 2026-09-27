@@ -63,4 +63,17 @@ public class UploadProtocolGuardTest {
         assertTrue("zero-block path must return the propagated commit result",
                 src.contains("return committed"));
     }
+
+    @Test
+    public void uploadBatchIsSequential() throws IOException {
+        String src = readRepoFile("src", "main", "java", "com", "winlator", "star", "store", "SteamCloudSaveManager.kt");
+        int upload = src.indexOf("fun uploadSaves(");
+        assertTrue("uploadSaves must exist", upload >= 0);
+        int next = src.indexOf("fun uploadFromLibrary(", upload);
+        if (next < 0) next = src.length();
+        String body = src.substring(upload, next);
+        assertFalse("the upload loop must NOT use runConcurrently (WinNative uploads sequentially)",
+                body.contains("runConcurrently(toUpload"));
+        assertTrue("the upload loop must iterate sequentially", body.contains("for (entry in toUpload)"));
+    }
 }
