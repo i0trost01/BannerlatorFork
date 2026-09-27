@@ -161,6 +161,14 @@ object SteamInputDiagnostics {
             out += "steamInputEnabled=${toggle || declared}  (toggle=$toggle, ownManifest=$declared)"
             out += "agent BL_AGENT_STEAMINPUT=${agentEnv?.get("BL_AGENT_STEAMINPUT") ?: "(absent)"}"
             out += "installDir=${installDir?.absolutePath ?: "UNRESOLVED"}"
+            // The game must run Valve's own steam_api for the genuine client to serve Steam Input;
+            // a dll whose size differs from its .bak is a gbe_fork shim (RealSteam restores it).
+            for (d in installDir?.let { findApiDlls(it) } ?: emptyList()) {
+                val bak = File(d.parentFile, d.name + ".bak")
+                val patched = bak.isFile && bak.length() != d.length()
+                out += "steam_api ${d.parentFile?.name}/${d.name}=${d.length()}B" +
+                    (if (bak.isFile) " bak=${bak.length()}B patched=$patched" else " bak=none")
+            }
             val manifest = installDir?.let { SteamInputLayouts.findManifest(it) }
             out += "own manifest=${manifest?.absolutePath ?: "(none)"}"
 
@@ -194,6 +202,17 @@ object SteamInputDiagnostics {
         val users = File(steamDir, "userdata").listFiles() ?: return emptyList()
         return users.mapNotNull { File(it, "config/localconfig.vdf").takeIf { f -> f.isFile } }
     }
+
+    private fun findApiDlls(installDir: File): List<File> =
+        runCatching {
+            installDir.walkTopDown().maxDepth(8)
+                .filter {
+                    it.isFile &&
+                        (it.name.equals("steam_api64.dll", true) || it.name.equals("steam_api.dll", true))
+                }
+                .take(8)
+                .toList()
+        }.getOrDefault(emptyList())
 
     /** Just the Steam Input lines: the support keys and the per-app UseSteamControllerConfig. */
     internal fun localConfigSteamInputLines(content: String, appId: Int): List<String> {

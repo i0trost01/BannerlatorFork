@@ -5901,6 +5901,18 @@ public class XServerDisplayActivity extends AppCompatActivity {
             int agentPort = com.winlator.star.store.SteamSessionManager.INSTANCE.openAgentChannel(agentChannelListener);
             steamAgentChannel = com.winlator.star.store.SteamSessionManager.INSTANCE.agentChannel();
 
+            // RealSteam runs the game against the GENUINE Steam client, which requires the game's own
+            // Valve steam_api dll. If Goldberg was applied earlier, the game dir holds gbe_fork's shim
+            // (plus a local steamclient dll), so the game would use the emulator and never the real
+            // client — and Steam Input would never reach it. Restore the pristine game files first:
+            // idempotent, a no-op when the game was never patched. Best-effort — never blocks the launch.
+            try {
+                GoldbergPatcher.restore(new File(ref.installDir), displayName);
+                Log.i("BH_REALSTEAM", "RealSteam: restored pristine game files (appId=" + ref.appId + ")");
+            } catch (Throwable t) {
+                Log.w("BH_REALSTEAM", "RealSteam: pristine restore failed (non-fatal)", t);
+            }
+
             realSteamPlan = RealSteamLauncher.prepare(
                     this,
                     realSteamDriveC,
