@@ -117,9 +117,7 @@ object SaveSyncStore {
         val cloudCount = rec?.optInt("cloudFileCount", 0) ?: 0
         val lastDownloadAt = rec?.optLong("lastDownloadAt", 0L) ?: 0L
         val lastUploadAt = rec?.optLong("lastUploadAt", 0L) ?: 0L
-        val cloudManifestHash = rec?.optString("cloudManifestHash", "") ?: ""
-        val librarySnapshotHash = rec?.optString("librarySnapshotHash", "") ?: ""
-        val cloudKnown = cloudManifestHash.isNotEmpty()
+        val cloudKnown = !rec?.optString("cloudManifestHash").isNullOrEmpty()
 
         val state = computeState(
             hasContainer = container != null,
@@ -131,8 +129,6 @@ object SaveSyncStore {
             cloudFileCount = cloudCount,
             cloudKnown = cloudKnown,
             refreshCloudAhead = false,
-            librarySnapshotHash = librarySnapshotHash,
-            cloudManifestHash = cloudManifestHash,
         )
 
         return SaveStatus(
@@ -281,8 +277,6 @@ object SaveSyncStore {
         cloudFileCount: Int,
         cloudKnown: Boolean,
         refreshCloudAhead: Boolean,
-        librarySnapshotHash: String,
-        cloudManifestHash: String,
     ): SaveState {
         // Cloud strictly ahead — only ever true on the refresh path.
         if (refreshCloudAhead) return SaveState.CLOUD_AHEAD
@@ -300,14 +294,9 @@ object SaveSyncStore {
             return SaveState.LOCAL_ONLY
         }
 
-        // Content match: the Library holds exactly what the cloud holds → in sync, regardless of
-        // mtimes (a save's mtime can be newer than the upload moment without being a real change).
-        val contentInSync = librarySnapshotHash.isNotEmpty() && librarySnapshotHash == cloudManifestHash
-        if (contentInSync && hasLibrary) return SaveState.IN_SYNC
-
-        // Local side (Library or container) changed since the last reconcile → needs uploading. This
-        // stays AFTER the content check: a genuinely newer file with different content still flags
-        // LOCAL_AHEAD even if a stale hash somehow lingered.
+        // Local side (Library or container) changed since the last reconcile → needs uploading.
+        // recordAfterUpload stamps lastUploadAt with the newest local mtime, so a successful upload
+        // leaves newestLocalMtime == lastSync here and clears LOCAL_AHEAD.
         if ((hasLibrary || containerFileCount > 0) && newestLocalMtime > lastSync) return SaveState.LOCAL_AHEAD
 
         // Nothing local is ahead — if there's no container to Apply into, that's the actionable gap.

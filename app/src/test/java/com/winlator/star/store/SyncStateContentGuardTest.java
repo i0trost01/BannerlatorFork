@@ -11,11 +11,12 @@ import java.nio.file.Paths;
 import org.junit.Test;
 
 /**
- * Guard: a game whose Library content matches the cloud must read IN_SYNC, not LOCAL_AHEAD.
+ * Guard: a successful upload must clear the stuck "local is ahead" state.
  *
- * The stuck "local is ahead" came from comparing raw mtimes (newestLocalMtime > lastSync). A successful
- * upload must clear it: lastUploadAt is stamped with the newest local mtime, and a content-hash match
- * between Library and cloud is an IN_SYNC tie-breaker.
+ * The stuck state came from comparing raw mtimes (newestLocalMtime > lastSync) against a wall-clock
+ * lastUploadAt. The fix is that recordAfterUpload stamps lastUploadAt with the NEWEST LOCAL MTIME, so
+ * after upload newestLocalMtime == lastSync. There is no content-hash tie-breaker: the Library and
+ * cloud hashes are computed over different schemes and can never match.
  */
 public class SyncStateContentGuardTest {
 
@@ -37,15 +38,6 @@ public class SyncStateContentGuardTest {
     }
 
     @Test
-    public void computeStateUsesContentHashForInSync() throws IOException {
-        String src = readRepoFile("src", "main", "java", "com", "winlator", "star", "store", "SaveSyncStore.kt");
-        assertTrue("computeState must consult the content hashes",
-                src.contains("librarySnapshotHash") && src.contains("cloudManifestHash"));
-        assertTrue("must short-circuit to IN_SYNC on a content match",
-                src.contains("contentInSync"));
-    }
-
-    @Test
     public void recordAfterUploadStampsNewestLocalMtime() throws IOException {
         String src = readRepoFile("src", "main", "java", "com", "winlator", "star", "store", "SaveSyncStore.kt");
         int idx = src.indexOf("fun recordAfterUpload(");
@@ -53,5 +45,7 @@ public class SyncStateContentGuardTest {
         String b = src.substring(idx, Math.min(src.length(), idx + 500));
         assertTrue("must stamp lastUploadAt with the newest local mtime, not wall-clock",
                 b.contains("newestLocalMtime") || b.contains("libraryNewestMtime"));
+        assertTrue("must NOT stamp lastUploadAt with System.currentTimeMillis()",
+                !b.contains("System.currentTimeMillis()"));
     }
 }
