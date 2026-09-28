@@ -117,8 +117,20 @@ object SaveSyncStore {
         val cloudCount = rec?.optInt("cloudFileCount", 0) ?: 0
         val lastDownloadAt = rec?.optLong("lastDownloadAt", 0L) ?: 0L
         val lastUploadAt = rec?.optLong("lastUploadAt", 0L) ?: 0L
-        val localBaselineMtime = rec?.optLong("localBaselineMtime", 0L) ?: 0L
+        var localBaselineMtime = rec?.optLong("localBaselineMtime", 0L) ?: 0L
         val cloudKnown = !rec?.optString("cloudManifestHash").isNullOrEmpty()
+
+        // One-time repair: records written before localBaselineMtime existed carry 0. If the game has
+        // already uploaded (lastUploadAt > 0) and has a Library, treat the current local mtimes as the
+        // synced baseline so an already-backed-up game stops reading LOCAL_AHEAD. Persist once (guarded
+        // by the flag + a non-zero baseline so a status read never writes on every call).
+        if (rec != null && localBaselineMtime == 0L && lastUploadAt > 0L && staleness.libraryFileCount > 0) {
+            val baseline = maxOf(staleness.libraryNewestMtime, staleness.containerNewestMtime)
+            if (baseline > 0L) {
+                writeHook(ctx, appId) { it.put("localBaselineMtime", baseline) }
+                localBaselineMtime = baseline
+            }
+        }
 
         val state = computeState(
             hasContainer = container != null,
