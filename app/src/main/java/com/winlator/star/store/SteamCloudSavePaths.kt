@@ -200,6 +200,25 @@ object SteamCloudSavePaths {
         return null
     }
 
+    /**
+     * True iff [rel] is a well-formed rooted path: a leading `%Token%` MUST be immediately followed
+     * by '/' (or be the entire path). Rejects malformed forms like `%WinAppDataRoaming%Cuphead` (a
+     * `%Root%` token glued onto the next segment with NO separator); such entries are not valid
+     * `%Root%/rest` library paths, so they must not inflate the snapshot/state or reach the upload
+     * set. A path with no leading `%` is not a rooted path — other validators own that judgement, so
+     * this returns true.
+     */
+    fun isValidRootedPath(rel: String): Boolean {
+        val r = rel.replace('\\', '/').trimStart('/')
+        if (!r.startsWith("%")) return true
+        val end = r.indexOf('%', startIndex = 1)
+        if (end < 0) return false
+        // The first '/' must sit IMMEDIATELY after the closing '%' (i.e. the "%Token%/rest" shape); a
+        // `%Token%` that is the whole path is also valid. `%Token%rest` (no separator) is malformed.
+        val slash = r.indexOf('/')
+        return slash == end + 1 || end == r.length - 1
+    }
+
     // ── Private helpers ──────────────────────────────────────────────────────────
 
     /** Loose files with no recognizable root token fall back here (game-install-relative). */

@@ -427,7 +427,11 @@ object SaveSyncStore {
         val lines = ArrayList<String>()
         root.walkTopDown().filter { it.isFile }.forEach { f ->
             val rel = f.absolutePath.removePrefix(base).trimStart('/')
-            if (rel.isNotEmpty()) lines.add("$rel|${f.length()}|${f.lastModified()}")
+            // Skip malformed rooted paths (e.g. "%WinAppDataRoaming%Cuphead", a %Root% token with no
+            // '/' separator): not a valid %Root%/rest library path, so it must not inflate the file
+            // count or perturb the snapshot hash that drives the sync state.
+            if (rel.isEmpty() || !SteamCloudSavePaths.isValidRootedPath(rel)) return@forEach
+            lines.add("$rel|${f.length()}|${f.lastModified()}")
         }
         if (lines.isEmpty()) return 0 to ""
         lines.sort()

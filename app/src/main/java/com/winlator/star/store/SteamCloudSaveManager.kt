@@ -976,7 +976,11 @@ object SteamCloudSaveManager {
         val out = ArrayList<Pair<File, String>>()
         root.walkTopDown().filter { it.isFile }.forEach { f ->
             val rel = f.absolutePath.removePrefix(base).trimStart('/')
-            if (rel.isNotEmpty()) out.add(f to rel)
+            // Skip malformed rooted paths (e.g. "%WinAppDataRoaming%Cuphead", a %Root% token glued to
+            // the next segment with no '/'): not a valid %Root%/rest library path, so it is never
+            // uploaded, applied, or counted. See SteamCloudSavePaths.isValidRootedPath.
+            if (rel.isEmpty() || !SteamCloudSavePaths.isValidRootedPath(rel)) return@forEach
+            out.add(f to rel)
         }
         return out
     }
