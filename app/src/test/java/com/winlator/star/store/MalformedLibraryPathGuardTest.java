@@ -1,5 +1,6 @@
 package com.winlator.star.store;
 
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
@@ -12,7 +13,11 @@ import org.junit.Test;
 
 /**
  * Guard: a malformed library rel path ("%Root%" token not followed by '/', e.g. "%WinAppDataRoaming%Cuphead")
- * must be rejected so it neither inflates the local snapshot nor the upload set.
+ * must be rejected so it neither inflates the local snapshot nor the upload set, EXCEPT the deliberate
+ * fused "%GameInstall%rest" form that real Steam manifests use (HL2 etc.).
+ *
+ * <p>{@link SteamCloudSavePaths#isValidRootedPath(String)} is a pure string function, so the helper is
+ * exercised directly (the object's class-init only builds its string tables — no Android side effects).</p>
  */
 public class MalformedLibraryPathGuardTest {
 
@@ -34,11 +39,41 @@ public class MalformedLibraryPathGuardTest {
     }
 
     @Test
-    public void malformedRootTokenIsRejected() throws IOException {
+    public void gameInstallFusedPathIsAccepted() {
+        assertTrue("fused %GameInstall% path must be accepted",
+                SteamCloudSavePaths.INSTANCE.isValidRootedPath("%GameInstall%hl2/save/x.sav"));
+        assertTrue("bare %GameInstall% token must be accepted",
+                SteamCloudSavePaths.INSTANCE.isValidRootedPath("%GameInstall%"));
+    }
+
+    @Test
+    public void malformedNonGameInstallFusedPathIsRejected() {
+        assertFalse("non-GameInstall fused token must be rejected",
+                SteamCloudSavePaths.INSTANCE.isValidRootedPath("%WinAppDataRoaming%Cuphead"));
+        assertFalse("non-GameInstall fused token mid-path must be rejected",
+                SteamCloudSavePaths.INSTANCE.isValidRootedPath("%WinAppDataRoaming%Cuphead/slot.sav"));
+    }
+
+    @Test
+    public void wellFormedRootedPathIsAccepted() {
+        assertTrue("separated %Root%/rest must be accepted",
+                SteamCloudSavePaths.INSTANCE.isValidRootedPath("%WinAppDataRoaming%/Cuphead/slot.sav"));
+        assertTrue("non-rooted path must be accepted",
+                SteamCloudSavePaths.INSTANCE.isValidRootedPath("Documents/foo"));
+        assertTrue("bare %Token% must be accepted",
+                SteamCloudSavePaths.INSTANCE.isValidRootedPath("%Root%"));
+        assertFalse("unterminated %Token must be rejected",
+                SteamCloudSavePaths.INSTANCE.isValidRootedPath("%abc"));
+    }
+
+    @Test
+    public void helperExemptsGameInstallFusedForm() throws IOException {
         String src = readRepoFile("src", "main", "java", "com", "winlator", "star", "store", "SteamCloudSavePaths.kt");
-        assertTrue("must validate a %Root% token is followed by '/' or end",
-                src.contains("%") && (src.contains("isValidRootPath") || src.contains("rootPathValid") ||
-                    src.contains("looksLikeRootedPath") || src.contains("indexOf('/')")));
+        int idx = src.indexOf("fun isValidRootedPath(");
+        assertTrue("isValidRootedPath must exist", idx >= 0);
+        String body = src.substring(idx, Math.min(src.length(), idx + 1200));
+        assertTrue("must exempt %GameInstall% from the fused-form rejection (source assertion)",
+                body.contains("%GameInstall%"));
     }
 
     @Test

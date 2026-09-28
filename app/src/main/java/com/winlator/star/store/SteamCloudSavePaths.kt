@@ -202,7 +202,9 @@ object SteamCloudSavePaths {
 
     /**
      * True iff [rel] is a well-formed rooted path: a leading `%Token%` MUST be immediately followed
-     * by '/' (or be the entire path). Rejects malformed forms like `%WinAppDataRoaming%Cuphead` (a
+     * by '/' (or be the entire path), with ONE intentional exception — `%GameInstall%`, which Steam
+     * fuses directly onto the rest of the path (`%GameInstall%hl2/save/x.sav`, no separator; see
+     * [toLibraryRel]). Rejects malformed forms like `%WinAppDataRoaming%Cuphead` (a non-GameInstall
      * `%Root%` token glued onto the next segment with NO separator); such entries are not valid
      * `%Root%/rest` library paths, so they must not inflate the snapshot/state or reach the upload
      * set. A path with no leading `%` is not a rooted path — other validators own that judgement, so
@@ -213,10 +215,12 @@ object SteamCloudSavePaths {
         if (!r.startsWith("%")) return true
         val end = r.indexOf('%', startIndex = 1)
         if (end < 0) return false
-        // The first '/' must sit IMMEDIATELY after the closing '%' (i.e. the "%Token%/rest" shape); a
-        // `%Token%` that is the whole path is also valid. `%Token%rest` (no separator) is malformed.
-        val slash = r.indexOf('/')
-        return slash == end + 1 || end == r.length - 1
+        val token = r.substring(0, end + 1)          // includes both '%'
+        if (end == r.length - 1) return true         // the token is the whole path
+        if (r[end + 1] == '/') return true           // "%Token%/rest"
+        // Fused form (%Token%rest): only valid for %GameInstall%, which Steam fuses. Every other root
+        // glued onto its next segment (e.g. %WinAppDataRoaming%Cuphead) is malformed.
+        return token.equals("%GameInstall%", ignoreCase = true)
     }
 
     // ── Private helpers ──────────────────────────────────────────────────────────
