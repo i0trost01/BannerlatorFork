@@ -184,7 +184,9 @@ object SteamCloudSaveManager {
                     if (hasCloudFiles) {
                         SaveSyncStore.clearNoSteamCloud(ctx, appId)
                     } else {
-                        cb.onError(NO_RETENTION_MESSAGE)
+                        // Nothing to send and the cloud keeps none of this game's saves — per the
+                        // user's rule this is a plain no-op SUCCESS, not an alarm.
+                        cb.onDone(NO_RETENTION_MESSAGE)
                         return@Thread
                     }
                 }
@@ -194,8 +196,8 @@ object SteamCloudSaveManager {
                 // would "succeed" but nothing persists, so we'd FALSELY report "Uploaded N". Read the
                 // app's declared UFS config from PICS; if it says "no cloud", stop here and tell the
                 // truth. NULL = couldn't determine → proceed + post-upload emptiness check catches it.
-                // Reported via onError (not onDone) so the SaveSyncStore.recordAfterUpload hook does
-                // NOT fire — we must not stamp a lastUploadAt "cloud sync" that never happened.
+                // A client-side no-op is reported via onDone (not onError): nothing was sent, but
+                // nothing went wrong either.
                 val support: Boolean? = hasCloudSupport(ctx, appId)
                 if (support == false) {
                     // The PICS verdict is a metadata GUESS and can be a false negative for Auto-Cloud
@@ -204,7 +206,7 @@ object SteamCloudSaveManager {
                     // files, upload; only a genuinely empty manifest honors the no-cloud message.
                     val hasCloudFiles = runCatching { steamCloud.listFiles(appId).isNotEmpty() }.getOrDefault(false)
                     if (!hasCloudFiles) {
-                        cb.onError(NO_CLOUD_MESSAGE)
+                        cb.onDone(NO_CLOUD_MESSAGE)
                         return@Thread
                     }
                 }
@@ -347,31 +349,31 @@ object SteamCloudSaveManager {
                     unverified = uploaded.get() - verified
                 }
 
-                // ONE decision block for every outcome. A partial upload (verified > 0) is success
-                // REGARDLESS of allOk; only a genuinely empty cloud after a committed upload, or a
-                // cloud that holds none of what we sent, is an error.
+                // ── THE USER'S RULE: nothing uploaded must NOT be an error ─────────────
+                // Every CLIENT-SIDE outcome is a success summary — an upload with nothing to do (all
+                // files already in the cloud, or no changes) must never alarm the user. The only
+                // errors uploadSaves raises are transport/auth/exception (requireCloud()==null,
+                // batchId==0, and the thrown-exception catch above/below); a partial upload that put
+                // at least one file in the cloud is likewise SUCCESS, even if some per-file commits
+                // failed. Most games have a single changed save; skipping/deduping the rest is fine.
+                val failed = toUpload.size - uploaded.get()
+                val extra = buildString {
+                    if (unverified > 0) append("; $unverified already in cloud or skipped")
+                    if (failed > 0) append("; $failed failed")
+                }
                 if (uploaded.get() > 0 && verified == 0 && unverified == uploaded.get() &&
                     remoteShaByPath != null && remoteShaByPath.isEmpty()) {
-                    // Nothing at all is in the cloud after a committed >0 upload → no retention.
+                    // The cloud kept nothing this round — remember it (informational), but do not
+                    // treat it as a user-facing error; the saves are safe in the Library.
                     SaveSyncStore.markNoSteamCloud(ctx, appId)
-                    cb.onError(NO_RETENTION_MESSAGE)
+                    cb.onDone("Uploaded 0 of ${toUpload.size} changed; cloud kept none (saved locally)$extra")
                 } else if (verified > 0) {
-                    // At least one file landed → SUCCESS, even if some per-file commits failed. Most
-                    // games have a single changed save; skipping/deduping the rest is fine (the cloud
-                    // already holds them).
-                    val failed = toUpload.size - uploaded.get()
-                    val extra = buildString {
-                        if (unverified > 0) append("; $unverified already in cloud or skipped")
-                        if (failed > 0) append("; $failed failed")
-                    }
+                    // At least one file landed → SUCCESS, even if some per-file commits failed.
                     cb.onDone("Uploaded $verified of ${toUpload.size} changed$extra, $upToDate already up-to-date")
-                } else if (allOk.get()) {
-                    // Every commit acked, yet nothing verified (cloud kept none of our bytes, or we
-                    // could not verify) → honest failure.
-                    cb.onError("Uploaded 0 of ${uploaded.get()} changed; no file reached Steam Cloud")
                 } else {
-                    // A per-file commit failed AND verification proved nothing landed → honest failure.
-                    cb.onError("Uploaded ${uploaded.get()} of ${toUpload.size} changed; some files failed")
+                    // Every commit acked but nothing verified, or a partial that verified nothing: the
+                    // cloud holds none of what we sent. Still a client-side no-op summary, not an error.
+                    cb.onDone("Uploaded $verified of ${toUpload.size} changed$extra, $upToDate already up-to-date")
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "uploadSaves failed", e)

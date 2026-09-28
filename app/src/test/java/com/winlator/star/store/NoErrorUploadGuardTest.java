@@ -11,9 +11,12 @@ import java.nio.file.Paths;
 import org.junit.Test;
 
 /**
- * Guard: a partial cloud upload (some files verified) is SUCCESS, not an error.
+ * Guard: an upload that has nothing to do (or uploads partially) must NOT report an error.
+ *
+ * The only errors uploadSaves may raise are transport/auth/exception: not signed in, a refused batch,
+ * or a thrown exception. Every client-side no-op outcome is a plain success summary.
  */
-public class PartialUploadAcceptGuardTest {
+public class NoErrorUploadGuardTest {
 
     private static String readRepoFile(String... segments) throws IOException {
         Path root = Paths.get("").toAbsolutePath();
@@ -46,22 +49,21 @@ public class PartialUploadAcceptGuardTest {
     }
 
     @Test
-    public void partialUploadWithAtLeastOneVerifiedIsSuccess() throws IOException {
+    public void uploadNoOpOutcomesAreSuccessNotError() throws IOException {
         String src = readRepoFile("src", "main", "java", "com", "winlator", "star", "store", "SteamCloudSaveManager.kt");
         String b = body(src, "fun uploadSaves(");
-        assertTrue("verified>0 branch present", b.contains("else if (verified > 0)"));
-        assertTrue("the partial-success branch must use onDone", b.contains("onDone(\"Uploaded $verified"));
-        assertTrue("the blanket 'did not reach Steam Cloud' error must be removed",
-                !b.contains("did not reach Steam Cloud"));
+        // No client-side no-op may call onError with a "nothing/partial" style message.
+        assertTrue("must not error with 'no file reached Steam Cloud'", !b.contains("no file reached Steam Cloud"));
+        assertTrue("must not error with 'some files failed'", !b.contains("some files failed"));
+        // The no-retention message must no longer be delivered via onError.
+        assertTrue("no-retention must not be an onError", !b.contains("cb.onError(NO_RETENTION_MESSAGE)"));
     }
 
     @Test
-    public void emptyManifestIsReportedAsNoRetentionWithoutError() throws IOException {
+    public void transportAndExceptionErrorsRemain() throws IOException {
         String src = readRepoFile("src", "main", "java", "com", "winlator", "star", "store", "SteamCloudSaveManager.kt");
         String b = body(src, "fun uploadSaves(");
-        assertTrue("must keep the no-retention mark", b.contains("markNoSteamCloud"));
-        assertTrue("must keep the no-retention message", b.contains("NO_RETENTION_MESSAGE"));
-        assertTrue("no-retention must be a plain onDone, not an error",
-                !b.contains("cb.onError(NO_RETENTION_MESSAGE)"));
+        assertTrue("must keep the not-signed-in error", b.contains("Not signed in"));
+        assertTrue("must keep the refused-batch error", b.contains("refused to open a cloud upload batch"));
     }
 }
