@@ -57,6 +57,7 @@ public class NoErrorUploadGuardTest {
         assertTrue("must not error with 'some files failed'", !b.contains("some files failed"));
         // The no-retention message must no longer be delivered via onError.
         assertTrue("no-retention must not be an onError", !b.contains("cb.onError(NO_RETENTION_MESSAGE)"));
+        assertTrue("GUARD 1 must not error", !b.contains("cb.onError(NO_CLOUD_MESSAGE)"));
     }
 
     @Test
@@ -65,5 +66,6 @@ public class NoErrorUploadGuardTest {
         String b = body(src, "fun uploadSaves(");
         assertTrue("must keep the not-signed-in error", b.contains("Not signed in"));
         assertTrue("must keep the refused-batch error", b.contains("refused to open a cloud upload batch"));
+        assertTrue("must keep the exception error", b.contains("Upload error:"));
     }
 }

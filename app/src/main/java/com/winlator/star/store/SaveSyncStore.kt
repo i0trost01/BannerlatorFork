@@ -117,7 +117,9 @@ object SaveSyncStore {
         val cloudCount = rec?.optInt("cloudFileCount", 0) ?: 0
         val lastDownloadAt = rec?.optLong("lastDownloadAt", 0L) ?: 0L
         val lastUploadAt = rec?.optLong("lastUploadAt", 0L) ?: 0L
-        val cloudKnown = !(rec?.optString("cloudManifestHash").isNullOrEmpty())
+        val cloudManifestHash = rec?.optString("cloudManifestHash", "") ?: ""
+        val librarySnapshotHash = rec?.optString("librarySnapshotHash", "") ?: ""
+        val cloudKnown = cloudManifestHash.isNotEmpty()
 
         val state = computeState(
             hasContainer = container != null,
@@ -129,6 +131,8 @@ object SaveSyncStore {
             cloudFileCount = cloudCount,
             cloudKnown = cloudKnown,
             refreshCloudAhead = false,
+            librarySnapshotHash = librarySnapshotHash,
+            cloudManifestHash = cloudManifestHash,
         )
 
         return SaveStatus(
@@ -200,10 +204,21 @@ object SaveSyncStore {
         rebaselineCloudAsync(ctx, appId)
     }
 
-    /** Library → Cloud succeeded. Same two-phase split as [recordAfterDownload]: stamp lastUploadAt
-     *  locally + persist synchronously first, then re-baseline the cloud manifest off-thread. */
+    /** Library → Cloud succeeded. Same two-phase split as [recordAfterDownload], but the local stamp is
+     *  the NEWEST LOCAL MTIME (not wall-clock). Stamping `System.currentTimeMillis()` raced the save
+     *  files' mtimes: whenever a file's mtime was newer than the upload moment, the record left
+     *  `newestLocalMtime > lastUploadAt` and the row stuck on LOCAL_AHEAD forever. Stamping the newest
+     *  mtime makes the state machine see `newestLocalMtime == lastSync` immediately; only a later local
+     *  change (a genuinely newer file) re-triggers LOCAL_AHEAD. */
     fun recordAfterUpload(ctx: Context, appId: Int) {
-        writeHook(ctx, appId) { rec -> rec.put("lastUploadAt", System.currentTimeMillis()) }
+        writeHook(ctx, appId) { rec ->
+            val installDir = try {
+                SteamRepository.getInstance().getDatabase().getGame(appId)?.installDir ?: ""
+            } catch (t: Throwable) { "" }
+            val st = SteamCloudSaveManager.staleness(ctx, appId, installDir)
+            val newestLocalMtime = maxOf(st.libraryNewestMtime, st.containerNewestMtime)
+            rec.put("lastUploadAt", newestLocalMtime)
+        }
         rebaselineCloudAsync(ctx, appId)
     }
 
@@ -266,6 +281,8 @@ object SaveSyncStore {
         cloudFileCount: Int,
         cloudKnown: Boolean,
         refreshCloudAhead: Boolean,
+        librarySnapshotHash: String,
+        cloudManifestHash: String,
     ): SaveState {
         // Cloud strictly ahead — only ever true on the refresh path.
         if (refreshCloudAhead) return SaveState.CLOUD_AHEAD
@@ -283,7 +300,14 @@ object SaveSyncStore {
             return SaveState.LOCAL_ONLY
         }
 
-        // Local side (Library or container) changed since the last reconcile → needs uploading.
+        // Content match: the Library holds exactly what the cloud holds → in sync, regardless of
+        // mtimes (a save's mtime can be newer than the upload moment without being a real change).
+        val contentInSync = librarySnapshotHash.isNotEmpty() && librarySnapshotHash == cloudManifestHash
+        if (contentInSync && hasLibrary) return SaveState.IN_SYNC
+
+        // Local side (Library or container) changed since the last reconcile → needs uploading. This
+        // stays AFTER the content check: a genuinely newer file with different content still flags
+        // LOCAL_AHEAD even if a stale hash somehow lingered.
         if ((hasLibrary || containerFileCount > 0) && newestLocalMtime > lastSync) return SaveState.LOCAL_AHEAD
 
         // Nothing local is ahead — if there's no container to Apply into, that's the actionable gap.
