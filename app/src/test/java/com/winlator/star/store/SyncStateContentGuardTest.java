@@ -14,9 +14,12 @@ import org.junit.Test;
  * Guard: a successful upload must clear the stuck "local is ahead" state.
  *
  * The stuck state came from comparing raw mtimes (newestLocalMtime > lastSync) against a wall-clock
- * lastUploadAt. The fix is that recordAfterUpload stamps lastUploadAt with the NEWEST LOCAL MTIME, so
- * after upload newestLocalMtime == lastSync. There is no content-hash tie-breaker: the Library and
- * cloud hashes are computed over different schemes and can never match.
+ * lastUploadAt. The fix keeps two SEPARATE stamps: recordAfterUpload writes localBaselineMtime with
+ * the NEWEST LOCAL MTIME (so after upload newestLocalMtime == localSyncedThrough) while lastUploadAt
+ * keeps the REAL wall-clock upload time (the Save Manager displays it as "Uploaded N"). Overloading
+ * lastUploadAt with the mtime made no-op re-uploads show a misleading/future time. There is no
+ * content-hash tie-breaker: the Library and cloud hashes are computed over different schemes and can
+ * never match.
  */
 public class SyncStateContentGuardTest {
 
@@ -42,10 +45,10 @@ public class SyncStateContentGuardTest {
         String src = readRepoFile("src", "main", "java", "com", "winlator", "star", "store", "SaveSyncStore.kt");
         int idx = src.indexOf("fun recordAfterUpload(");
         assertTrue("recordAfterUpload must exist", idx >= 0);
-        String b = src.substring(idx, Math.min(src.length(), idx + 500));
-        assertTrue("must stamp lastUploadAt with the newest local mtime, not wall-clock",
-                b.contains("newestLocalMtime") || b.contains("libraryNewestMtime"));
-        assertTrue("must NOT stamp lastUploadAt with System.currentTimeMillis()",
-                !b.contains("System.currentTimeMillis()"));
+        String b = src.substring(idx, Math.min(src.length(), idx + 700));
+        assertTrue("must stamp localBaselineMtime with the newest local mtime",
+                b.contains("localBaselineMtime") && (b.contains("newestLocalMtime") || b.contains("libraryNewestMtime")));
+        assertTrue("must restore lastUploadAt to the real wall-clock upload time",
+                b.contains("lastUploadAt") && b.contains("System.currentTimeMillis()"));
     }
 }
